@@ -1,0 +1,28 @@
+[project]
+name = "realsense-face-id"
+version = "0.1.0"
+description = "Face-ID authentication and anti-spoofing on an Intel RealSense D435"
+readme = "README.md"
+authors = [
+    { name = "alanfrancis442", email = "alan.prime567@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.3",
+    "opencv-python>=5.0.0.93",
+    "pyrealsense2>=2.58.4.10922",
+    "pyyaml>=6.0.3",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]

@@ -1,0 +1,150 @@
+# Implementation Checklist
+
+Tracks the build against [PRD.md](PRD.md). Tick items as they are done.
+
+**Platform:** current x86_64 Linux machine. Raspberry Pi work is deferred.
+**Last updated:** 2026-10-05
+
+Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
+
+## Summary
+
+| PRD step | Status |
+| --- | --- |
+| 1. Environment + capture | Implemented; tape check passed (not on white, not past 100 cm) |
+| 2. Pi build | Deferred |
+| 3. Detect + align + quality gate | To do |
+| 4. Baseline identity | To do |
+| 5. Geometry liveness | To do |
+| 6. Door control | To do |
+| 7. Attack dataset + learned liveness + fusion | To do |
+| 8. Improve identity | To do |
+| 9. Evaluation + threshold tuning | To do |
+| 10. Hardening | To do (Pi parts deferred) |
+
+---
+
+## Step 1: Environment + capture
+
+- [x] uv project, Python 3.12, `pyproject.toml` + `uv.lock`
+- [x] Dependencies installed: numpy, opencv-python, pyrealsense2, pyyaml; dev: pytest, ruff
+- [x] `configs/default.yaml` with PRD sections plus `filters`, `emitter`, `preview`
+- [x] `capture/config.py`: load and validate config
+- [x] `capture/frame.py`: `Frame`, `Intrinsics`, `center_roi_median_m`
+- [x] `capture/filters.py`: decimation, disparity, spatial, temporal, hole filling
+- [x] `capture/realsense_stream.py`: 848×480 @ 30 fps IR + depth, depth units 0.1 mm, align to IR
+- [x] Emitter on/off alternation with per-frame tag from metadata
+- [x] Live preview with center box, emitter state, fps, median distance
+- [x] Unit tests (27, no camera needed)
+- [x] Docs: `README.md`, `docs/capture.md`
+- [x] Headless smoke test on the real D435 (emitter alternates every frame)
+- [x] **Check:** center-box distance matches a tape measure. Checked 2026-10-05: correct from 10 cm to about 100 cm on black and green walls. Not checked past 100 cm. A white wall reads `n/a` (IR image clips, so there is no depth).
+- [ ] Decide hole-filling mode (1 vs 2) from real face data
+- [ ] `capture/recorder.py`: save synchronised IR + depth with labels to `data/raw/` (also needed for step 7)
+- [ ] `.gitignore` entry for `data/`; first git commit
+
+## Step 2: Pi build
+
+- [~] Build librealsense + Python bindings on the Pi 4
+- [~] 30 fps for 10 minutes with no dropout on the Pi
+
+## Step 3: Detect + align + quality gate
+
+- [ ] Download YuNet model; record it in `docs/CITATIONS.md`
+- [ ] `face/detect.py`: YuNet on IR, box + 5 landmarks
+- [ ] `face/align.py`: similarity transform to 112×112, same crop on depth, `FaceCrop`
+- [ ] `capture/quality_gate.py`: no face / multiple faces
+- [ ] Quality gate: distance outside 0.30-0.60 m (median depth in face box)
+- [ ] Quality gate: face too small (< ~120 px) or off-centre
+- [ ] Quality gate: blur (variance of Laplacian)
+- [ ] Quality gate: too many invalid depth pixels (> ~20%)
+- [ ] User prompts for each rejection
+- [ ] Unit tests for the gate rules
+- [ ] **Check:** correct accept/reject prompts on a test set
+
+## Step 4: Baseline identity
+
+- [ ] Download SFace model; record it in `docs/CITATIONS.md`
+- [ ] `face/embed.py`: SFace on aligned IR crop, 128-D, L2-normalised
+- [ ] `face/match.py`: gallery matrix, `scores = gallery @ query`, threshold, `unknown`
+- [ ] Unit tests with known embeddings
+- [ ] **Check:** correct match for enrolled people, `unknown` for strangers
+
+## Step 5: Geometry liveness
+
+- [ ] `liveness/depth_check.py`: deproject face-box depth to 3D
+- [ ] Plane fit (RANSAC / least squares)
+- [ ] Relief (5th-95th percentile) and nose-to-cheek gap
+- [ ] Reject when depth is mostly invalid
+- [ ] Thresholds from own data (`relief_min_m`, `flat_max_m`)
+- [ ] Unit tests on synthetic flat and curved point clouds
+- [ ] **Check:** rejects printed photos and phone screens in a first attack test
+
+## Step 6: Door control
+
+- [ ] `control/state_machine.py`: IDLE → FACE_DETECTED → QUALITY_OK → LIVENESS_PASS → MATCHED → UNLOCKED → COOLDOWN, plus DENIED
+- [ ] Multi-frame decision (5-10 frames) with agreement
+- [ ] `control/relay.py`: relay interface + **mock relay** (logs lock/unlock) for the dev machine
+- [ ] Auto re-lock after `unlock_seconds`
+- [ ] Lockout after `max_failures`, cooldown `cooldown_seconds`
+- [ ] `control/api.py` (FastAPI): `POST /authenticate`, `GET /health`
+- [ ] Admin endpoints: `POST /admin/enroll`, `DELETE /admin/person/{id}` with admin token
+- [ ] `logging_/access_log.py`: SQLite `access_events`, log every attempt including spoofs
+- [ ] Add fastapi, uvicorn
+- [ ] Unit tests: state-machine transitions
+- [ ] **Check:** end-to-end unlock for a live enrolled person; denied for a spoof
+- [~] Real GPIO relay on the Pi (`RPi.GPIO`, 12 V strike, fail-secure NO/COM)
+
+## Enrolment (needed for steps 4 and 6)
+
+- [ ] `enroll/consent_form.md` and consent recording
+- [ ] `enroll/enroll.py`: capture 10-20 frames that pass quality gate and liveness
+- [ ] `enroll/store.py`: embeddings only, encrypted at rest (Fernet or SQLCipher)
+- [ ] Admin commands: `enroll`, `list`, `update`, `delete` (delete removes embeddings and metadata)
+- [ ] Add cryptography
+
+## Step 7: Attack dataset + learned liveness + fusion
+
+- [ ] Genuine data from 10-20 volunteers (bright / dim / dark, glasses, pose), written consent
+- [ ] Attack data on the same camera: matte and glossy prints, phone/tablet photo and video, paper masks, silicone/3D masks if available
+- [ ] Splits by person and by attack type; one attack type held out entirely
+- [ ] Preprocess to `data/processed/` (detect, align, crop, normalise depth)
+- [ ] `liveness/ir_model.py`: `LivenessNet` (2-channel 112×112)
+- [ ] `liveness/train.py`: BCE, augmentation, ONNX export
+- [ ] `liveness/fusion.py`: `geometry_ok AND (w1*learned + w2*geometry > threshold)`
+- [ ] Add torch / torchvision (train group), onnxruntime
+- [ ] Optional: pretrain on CASIA-SURF (EULA needed)
+- [ ] **Check:** beats geometry-only on held-out attack types
+
+## Step 8: Improve identity
+
+- [ ] `face/train_embed.py`: fine-tune SFace on IR (+ depth) with an ArcFace-style loss
+- [ ] Export to ONNX
+- [ ] **Check:** lower FRR than baseline at the same FAR
+- [ ] Fallback if targets are missed: add RGB stream as optional embedding input
+
+## Step 9: Evaluation + threshold tuning
+
+- [ ] `eval/far_frr.py`: ROC, FAR / FRR for identity
+- [ ] `eval/spoof_eval.py`: APCER, BPCER, ACER per attack type
+- [ ] Ablation: geometry-only vs model-only vs fused
+- [ ] Lit vs dark room; glasses and makeup cases
+- [ ] `eval/latency.py`: per-stage latency (dev machine for now)
+- [ ] Tune thresholds in `configs/default.yaml` from data
+- [ ] **Check:** Section 2 targets met (FAR < 0.1%, FRR < 5%, attack rejection > 95%)
+
+## Step 10: Hardening
+
+- [ ] `eval/soak_test.py`: 48 h with no crash or manual restart
+- [ ] Failure handling: camera unplug, USB dropout, power loss (door stays locked)
+- [ ] USB dropout counter
+- [ ] ONNX INT8 quantisation
+- [~] Latency profiling and tuning on the Pi (target < 1.5 s)
+
+## Cross-cutting
+
+- [ ] `docs/CITATIONS.md`: every external model and dataset
+- [ ] `docs/LICENSES.md`
+- [ ] Integration tests: recorded frames replayed through the full pipeline
+- [ ] Privacy: embeddings only, encrypted, deletable (DPDP Act 2023 consent)
+- [ ] Make repo layout match PRD section 8 as modules land (`face/`, `liveness/`, `enroll/`, `control/`, `logging_/`, `eval/`, `data/`)
