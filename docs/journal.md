@@ -138,6 +138,14 @@ Standing closer than about 30 cm still failed after the distance floor was lower
 
 YuNet only looks for faces of about 10–300 px. On this camera a face nearer than ~30 cm is larger than 300 px, so the real face was skipped. Detection now also runs on a half-size and a quarter-size copy, drops boxes under 48 px, and if the laser-on image still has no usable face it tries the laser-off image. The smallest accepted face is 80 px, so a face at the far end of 60 cm is not called too small. Restart `liveness.watch` or the API to load this.
 
+## 2026-10-06 — Liveness check passed
+
+Alan confirmed the live liveness check works on this D435 (serial `236422073835`). A real face is detected and the geometry check passes, including closer than 30 cm, which had been failing earlier the same day. The running check is `uv run python -m liveness.watch` (and the same decision on `POST /v1/auth`).
+
+What that pass covers: YuNet finds the face on the IR image, five laser-on frames agree, a laser-off frame is in the window, and the depth shape is accepted under the starting thresholds in `configs/default.yaml` (`relief_min_m` 0.015, `flat_max_m` 0.005, `nose_cheek_min_m` 0.008, closest face 0.10 m, smallest face 80 px).
+
+Still open: blur, tuning those relief numbers from more people, a printed photo, a phone screen, and any DepthFake projector test. A live result still does not unlock the door. Identity matching is not built. 3D masks remain out of scope.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.
