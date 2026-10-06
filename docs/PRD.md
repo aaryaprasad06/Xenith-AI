@@ -68,7 +68,7 @@ Decide over a short window of frames (e.g. 5–10), not a single frame, and requ
 Reject a frame (with a user prompt) if any of these fail:
 
 - no face found, or more than one face
-- face distance outside 0.30–0.60 m (median depth in face box)
+- face distance outside 0.10–0.60 m (median depth in face box)
 - face box too small (\< \~120 px) or mostly off-centre
 - blur (variance of Laplacian below threshold)
 - too many invalid depth pixels (> \~20% holes) in the face region
@@ -138,7 +138,7 @@ SQLite table `access_events(id, ts, decision, reason, liveness_geom, liveness_mo
 
 ```yaml
 camera: {width: 848, height: 480, fps: 30, depth_units: 0.0001}
-quality: {min_dist_m: 0.30, max_dist_m: 0.60, min_face_px: 120, max_hole_frac: 0.2}
+quality: {min_dist_m: 0.10, max_dist_m: 0.60, min_face_px: 120, max_hole_frac: 0.2}
 liveness: {relief_min_m: 0.015, flat_max_m: 0.005, model_threshold: 0.5, frames_required: 5}
 match: {threshold: 0.45, unknown_label: "unknown"}
 door: {gpio_pin: 17, unlock_seconds: 5, max_failures: 5, cooldown_seconds: 60}

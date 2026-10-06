@@ -13,9 +13,9 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 | --- | --- |
 | 1. Environment + capture | Implemented; tape check passed (not on white, not past 100 cm) |
 | 2. Pi build | Deferred |
-| 3. Detect + align + quality gate | To do |
+| 3. Detect + align + quality gate | Detect, align, and most quality checks are in. Blur and a real-person prompt check are not |
 | 4. Baseline identity | To do |
-| 5. Geometry liveness | To do |
+| 5. Geometry liveness | Geometry gate is in. Thresholds are still the starting values. A print/screen test is not done |
 | 6. Door control | API shell started (no state machine, relay, or log yet) |
 | 7. Attack dataset + learned liveness + fusion | To do |
 | 8. Improve identity | To do |
@@ -41,7 +41,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] **Check:** center-box distance matches a tape measure. Checked 2026-10-05: correct from 10 cm to about 100 cm on black and green walls. Not checked past 100 cm. A white wall reads `n/a` (IR image clips, so there is no depth).
 - [ ] Decide hole-filling mode (1 vs 2) from real face data
 - [ ] `capture/recorder.py`: save synchronised IR + depth with labels to `data/raw/` (also needed for step 7)
-- [ ] `.gitignore` entry for `data/`; first git commit
+- [x] `.gitignore` entry for `data/`; first git commit
 
 ## Step 2: Pi build
 
@@ -50,16 +50,16 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Step 3: Detect + align + quality gate
 
-- [ ] Download YuNet model; record it in `docs/CITATIONS.md`
-- [ ] `face/detect.py`: YuNet on IR, box + 5 landmarks
-- [ ] `face/align.py`: similarity transform to 112×112, same crop on depth, `FaceCrop`
-- [ ] `capture/quality_gate.py`: no face / multiple faces
-- [ ] Quality gate: distance outside 0.30-0.60 m (median depth in face box)
-- [ ] Quality gate: face too small (< ~120 px) or off-centre
+- [x] Download YuNet model; record it in `docs/CITATIONS.md`
+- [x] `face/detect.py`: YuNet on IR, box + 5 landmarks
+- [x] `face/align.py`: similarity transform to 112×112, same crop on depth
+- [x] `capture/quality_gate.py`: no face / multiple faces (applied in `liveness/session.py`)
+- [x] Quality gate: distance outside 0.10-0.60 m (median depth in face box)
+- [x] Quality gate: face too small (< ~120 px) or off-centre
 - [ ] Quality gate: blur (variance of Laplacian)
-- [ ] Quality gate: too many invalid depth pixels (> ~20%)
-- [ ] User prompts for each rejection
-- [ ] Unit tests for the gate rules
+- [x] Quality gate: too many invalid depth pixels (> ~20%)
+- [x] User prompts for each rejection (the auth reason and the `liveness.watch` overlay)
+- [x] Unit tests for the gate rules
 - [ ] **Check:** correct accept/reject prompts on a test set
 
 ## Step 4: Baseline identity
@@ -72,12 +72,12 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Step 5: Geometry liveness
 
-- [ ] `liveness/depth_check.py`: deproject face-box depth to 3D
-- [ ] Plane fit (RANSAC / least squares)
-- [ ] Relief (5th-95th percentile) and nose-to-cheek gap
-- [ ] Reject when depth is mostly invalid
-- [ ] Thresholds from own data (`relief_min_m`, `flat_max_m`)
-- [ ] Unit tests on synthetic flat and curved point clouds
+- [x] `liveness/depth_check.py`: deproject face-box depth to 3D
+- [x] Plane fit (RANSAC / least squares)
+- [x] Relief (5th-95th percentile) and nose-to-cheek gap
+- [x] Reject when depth is mostly invalid
+- [ ] Thresholds from own data (`relief_min_m`, `flat_max_m`). The config still has the starting values: 1.5 cm and 0.5 cm
+- [x] Unit tests on synthetic flat and curved point clouds
 - [ ] **Check:** rejects printed photos and phone screens in a first attack test
 
 ## Step 6: Door control
@@ -144,7 +144,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Cross-cutting
 
-- [ ] `docs/CITATIONS.md`: every external model and dataset
+- [x] `docs/CITATIONS.md`: YuNet is recorded. No dataset is in use yet
 - [ ] `docs/LICENSES.md`
 - [ ] Integration tests: recorded frames replayed through the full pipeline
 - [ ] Privacy: embeddings only, encrypted, deletable (DPDP Act 2023 consent)

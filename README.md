@@ -12,16 +12,16 @@ Pi 4 the PRD names. Pi-specific work is deferred; see the status table.
 | --- | --- |
 | 1. Environment + capture | Done: live aligned IR + depth, filter chain, emitter tagging |
 | 2. Pi build | Deferred: running on this machine for now |
-| 3. Detect + align + quality gate | Not started |
+| 3. Detect + align + quality gate | YuNet, 112×112 align, and the quality checks except blur |
 | 4. Baseline identity (embed + match) | Not started |
-| 5. Geometry liveness | Not started |
-| 6. Door control (API, relay, state machine, log) | Not started |
+| 5. Geometry liveness | Depth shape gate is in. Print and screen tests are not |
+| 6. Door control (API, relay, state machine, log) | API and console are in. No state machine, relay, or log |
 | 7-10. Learned liveness, tuning, evaluation, hardening | Not started (Pi-specific parts of step 10 deferred) |
 
 The full task-by-task list is in [docs/CHECKLIST.md](docs/CHECKLIST.md).
 The decision log is in [docs/journal.md](docs/journal.md).
 
-Only the `capture/` package exists so far. Details: [docs/capture.md](docs/capture.md).
+Capture details: [docs/capture.md](docs/capture.md). Liveness is below.
 
 ## Requirements
 
@@ -58,6 +58,30 @@ Two windows open:
 
 Press `q` in either window to quit.
 
+## Run the liveness check
+
+```bash
+uv run python -m liveness.watch
+```
+
+Two windows open: the left IR image with the face box and five landmarks, and
+the depth image with the decision. Press `q` to quit.
+
+The check uses laser-on depth only. It needs five laser-on frames and at least
+one laser-off frame in the same short window. A flat photo or screen should
+read `rejected` (relief under 0.5 cm). A face should read `live` when the
+relief is at least 1.5 cm and the nose is closer than the cheeks. Those
+numbers are the starting thresholds in `configs/default.yaml`, not yet tuned
+on this camera.
+
+`live` does not unlock the door. Identity matching is not built.
+
+The same check runs when the console's Authenticate button calls `POST /v1/auth`.
+The decision is still `denied`, so a live stranger cannot open the door.
+
+Stand between 0.10 m and 0.60 m, on a black or green wall. A white wall has no
+depth, so the check says the face has no depth.
+
 ## API and web console
 
 The HTTP API follows the RealSenseID-REST layout: a FastAPI app, `/v1` routers
@@ -82,7 +106,7 @@ The console proxies `/v1`, `/health`, `/authenticate`, and `/admin` to the API.
 | People | `GET/POST/DELETE /v1/users` with `Authorization: Bearer <token>` |
 | Device | `GET /v1/device/info` |
 
-`POST /authenticate`, `POST /admin/enroll`, and `DELETE /admin/person/{id}` are the same operations under the names in the PRD. Enrolment stores the id only. Matching still returns denied, because liveness and embeddings are not built yet.
+`POST /authenticate`, `POST /admin/enroll`, and `DELETE /admin/person/{id}` are the same operations under the names in the PRD. Enrolment stores the id only. Authenticate runs the geometry liveness check and still returns `denied`, because embeddings are not built yet. A flat scene comes back `rejected`. A face that passes the depth shape comes back `live`, with the door still locked.
 
 ### Checking distance against a tape measure
 
@@ -128,20 +152,21 @@ these sections:
 | `emitter` | `alternate` | `true` alternates the IR projector on/off every frame |
 | `preview` | `center_box_frac` | Center box size as a fraction of the image (0.1 = 10% per side) |
 
-`quality`, `liveness`, `match` and `door` are required to exist but are used by
-later steps.
+`quality` and `liveness` are read by the geometry check. `match` and `door`
+are required to exist and are not used yet.
 
 ## Project layout
 
 ```
-capture/
-  config.py            load and validate configs/default.yaml
-  frame.py             Frame, Intrinsics, center_roi_median_m
-  filters.py           depth filter chain
-  realsense_stream.py  RealSenseStream and the live preview
+capture/               stream, filters, quality gate
+face/                  YuNet detect, 112×112 align
+liveness/              depth shape check and the live overlay
+api/                   FastAPI console backend
+web/                   Astro console
+models/                YuNet ONNX (see docs/CITATIONS.md)
 configs/default.yaml
 tests/                 pytest, no camera required
-docs/                  PRD and capture notes
+docs/                  PRD, checklist, journal
 ```
 
 ## Troubleshooting

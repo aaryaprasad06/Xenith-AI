@@ -1,8 +1,8 @@
 # auto_exposure_limit_us stops the IR image clipping to white on a close wall.
 # Without it the laser-on frame saturates and the center distance stays n/a.
 camera: {width: 848, height: 480, fps: 30, depth_units: 0.0001, auto_exposure_limit_us: 3000}
-quality: {min_dist_m: 0.30, max_dist_m: 0.60, min_face_px: 120, max_hole_frac: 0.2}
-liveness: {relief_min_m: 0.015, flat_max_m: 0.005, model_threshold: 0.5, frames_required: 5}
+quality: {min_dist_m: 0.10, max_dist_m: 0.60, min_face_px: 120, max_hole_frac: 0.2}
+liveness: {relief_min_m: 0.015, relief_max_m: 0.08, flat_max_m: 0.005, nose_cheek_min_m: 0.008, model_threshold: 0.5, frames_required: 5}
 match: {threshold: 0.45, unknown_label: "unknown"}
 door: {gpio_pin: 17, unlock_seconds: 5, max_failures: 5, cooldown_seconds: 60}
 

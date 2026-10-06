@@ -38,10 +38,18 @@ class DeleteResponse(BaseModel):
 
 
 class AuthResponse(BaseModel):
-    status: Literal["pipeline_not_ready", "camera_unavailable"]
+    status: Literal[
+        "camera_unavailable",
+        "no_frame",
+        "no_face",
+        "rejected",
+        "live",
+    ]
     user_id: str | None = None
     decision: Literal["denied"] = "denied"
     reason: str
+    relief_m: float | None = None
+    nose_cheek_m: float | None = None
 
 
 class ErrorBody(BaseModel):

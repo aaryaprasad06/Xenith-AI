@@ -1,10 +1,14 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from api.core.config import Settings
 from api.main import create_app
+from api.routers.v1.auth import authenticate
+from api.services.camera import CameraHub
+from capture.frame import Frame, Intrinsics
 
 
 @pytest.fixture
@@ -36,6 +40,36 @@ def test_auth_denies_until_the_matcher_exists(client: TestClient):
     alias = client.post("/authenticate")
     assert alias.status_code == 200
     assert alias.json()["decision"] == "denied"
+
+
+def test_auth_waits_until_frames_exist():
+    hub = CameraHub(enabled=True)
+    body = authenticate(hub)
+    assert body.decision == "denied"
+    assert body.status == "no_frame"
+
+
+def test_auth_says_no_face_on_a_blank_window():
+    hub = CameraHub(enabled=True)
+    intr = Intrinsics(425, 425, 424, 240, 848, 480, "brown_conrady", (0, 0, 0, 0, 0))
+    blank = np.zeros((480, 848), dtype=np.uint8)
+    depth = np.full((480, 848), 0.5, dtype=np.float32)
+    for index in range(5):
+        hub._recent.append(
+            Frame(
+                ir=blank,
+                depth=depth,
+                intrinsics=intr,
+                timestamp=float(index),
+                emitter_state="on",
+            )
+        )
+    hub._recent.append(
+        Frame(ir=blank, depth=depth, intrinsics=intr, timestamp=5.0, emitter_state="off")
+    )
+    body = authenticate(hub)
+    assert body.decision == "denied"
+    assert body.status == "no_face"
 
 
 def test_device_and_preview_need_a_camera(client: TestClient):

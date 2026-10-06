@@ -112,6 +112,26 @@ What landed here, in our own code:
 
 Still not the door: no state machine, no relay, no access log.
 
+## 2026-10-06 — Geometry liveness
+
+The liveness check is the depth shape of one face, not a neural net. A learned model is not in the decision, and a failed shape check cannot be overridden later.
+
+What landed:
+
+- `models/face_detection_yunet_2023mar.onnx` — YuNet from the OpenCV zoo. Recorded in [CITATIONS.md](CITATIONS.md). `face/detect.py` returns a box and five landmarks on the left IR image. `face/align.py` warps IR and depth to 112×112 for a later embedding step. Alignment is not what the shape check uses.
+- `capture/quality_gate.py` — too small, off-centre, more than 20% missing depth, or median distance outside 0.10–0.60 m. The closest allowed distance was lowered from 0.30 m the same day: this camera already measured correctly from 10 cm, and 30 cm was rejecting people who were still in range.
+- `liveness/depth_check.py` — deproject the face box, RANSAC plane, relief is the 5th-to-95th percentile of the distance to that plane, plus the nose-to-cheek gap. Cheeks are sampled either side of the nose landmark, not from a cheek landmark (YuNet does not give one).
+- `liveness/session.py` — five laser-on frames must all pass, the face must stay roughly still, and the same window must include a laser-off frame. Depth is taken from the laser-on frames. The face is detected on the laser-on IR image, because that is the frame the exposure cap keeps bright.
+- `liveness/watch.py` — overlay. `POST /v1/auth` runs the same check. Both still refuse to unlock.
+
+A depth island is not a hard fail. On a white wall the background has no depth, so a real face is an island. That check would lock out a genuine person in the scene we already measured.
+
+Unit tests, no camera: a flat sheet at 0.50 m has relief 0.0 cm and is rejected. A synthetic bulge of 3.5 cm has relief 3.4 cm and a nose-to-cheek gap of 1.4 cm and passes. Thresholds in `configs/default.yaml` are still the starting values (`relief_min_m` 0.015, `flat_max_m` 0.005, `nose_cheek_min_m` 0.008, `relief_max_m` 0.08). They are not tuned on a real face on this D435.
+
+A 25-frame burst on the connected D435 ran the detector and returned `no_face`. The lens was not on a person, so this does not say whether YuNet finds a face in infrared. OpenCV printed a warning that the DNN target is not supported by its new graph engine. Detection still returned a result.
+
+Not done: blur check, a person standing in front of the camera, a printed photo, a phone screen, and any claim about a DepthFake projector. 3D masks remain out of scope.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

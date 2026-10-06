@@ -5,8 +5,9 @@ import Base from "../layouts/Base.astro";
 <Base title="Preview — Face-ID" current="preview">
   <h1>Preview</h1>
   <p class="lead">
-    Left infrared from the D435. Authenticate asks the API for a decision.
-    Matching is not built yet, so a working camera still returns denied.
+    Left infrared from the D435. Authenticate runs the depth liveness check.
+    A live face is still denied until identity matching exists, so the door stays locked.
+    A flat photo or phone screen should come back rejected.
   </p>
   <section class="panel">
     <img class="stream" src="/v1/preview/stream" alt="Live infrared preview" />

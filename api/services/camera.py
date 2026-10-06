@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections import deque
 from typing import Literal
 
 import cv2
@@ -15,6 +16,7 @@ import pyrealsense2 as rs
 
 from api.schemas import DeviceInfo
 from capture.config import load_config
+from capture.frame import Frame
 from capture.realsense_stream import RealSenseStream
 
 log = logging.getLogger(__name__)
@@ -44,6 +46,7 @@ class CameraHub:
         self.info: DeviceInfo | None = None
         self.error: str | None = None
         self._jpeg: bytes | None = None
+        self._recent: deque[Frame] = deque(maxlen=16)
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -80,6 +83,11 @@ class CameraHub:
         with self._lock:
             return self._jpeg
 
+    def recent_frames(self) -> list[Frame]:
+        """Newest frames, oldest first. Includes both laser-on and laser-off."""
+        with self._lock:
+            return list(self._recent)
+
     def _run(self) -> None:
         try:
             cfg = load_config(self.config_path)
@@ -94,6 +102,7 @@ class CameraHub:
                         continue
                     with self._lock:
                         self._jpeg = encoded.tobytes()
+                        self._recent.append(frame)
         except (RuntimeError, OSError) as exc:
             self.error = str(exc)
             log.exception("preview stream stopped")
