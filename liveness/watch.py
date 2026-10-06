@@ -18,7 +18,7 @@ import numpy as np
 from capture.config import load_config
 from capture.frame import Frame
 from capture.realsense_stream import RealSenseStream, _colorize_depth, _put_text
-from face.detect import Detection, get_detector
+from face.detect import Detection, faces_for_depth_frame, get_detector
 from liveness.session import judge_window
 
 
@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     cfg = load_config(args.config)
     required = int(cfg["liveness"]["frames_required"])
+    min_face_px = float(cfg["quality"]["min_face_px"])
     detector = get_detector()
 
     recent: deque[Frame] = deque(maxlen=max(12, required * 2))
@@ -56,7 +57,11 @@ def main(argv: list[str] | None = None) -> None:
             _put_text(ir_view, f"emitter: {frame.emitter_state}", 0)
 
             if frame.emitter_state == "on":
-                faces = detector.detect(frame.ir)
+                off_ir = next(
+                    (item.ir for item in reversed(recent) if item.emitter_state == "off"),
+                    None,
+                )
+                faces = faces_for_depth_frame(detector, frame.ir, off_ir, min_face_px)
                 on_frames.append(frame)
                 on_faces.append(faces)
                 last_faces = faces

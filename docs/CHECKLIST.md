@@ -55,7 +55,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] `face/align.py`: similarity transform to 112×112, same crop on depth
 - [x] `capture/quality_gate.py`: no face / multiple faces (applied in `liveness/session.py`)
 - [x] Quality gate: distance outside 0.10-0.60 m (median depth in face box)
-- [x] Quality gate: face too small (< ~120 px) or off-centre
+- [x] Quality gate: face too small (< ~80 px) or off-centre
 - [ ] Quality gate: blur (variance of Laplacian)
 - [x] Quality gate: too many invalid depth pixels (> ~20%)
 - [x] User prompts for each rejection (the auth reason and the `liveness.watch` overlay)

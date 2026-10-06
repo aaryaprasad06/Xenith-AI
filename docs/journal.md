@@ -132,6 +132,12 @@ A 25-frame burst on the connected D435 ran the detector and returned `no_face`. 
 
 Not done: blur check, a person standing in front of the camera, a printed photo, a phone screen, and any claim about a DepthFake projector. 3D masks remain out of scope.
 
+## 2026-10-06 — Close faces were missed
+
+Standing closer than about 30 cm still failed after the distance floor was lowered to 10 cm. The message was `no face` or `face is too small (32 px, need 120)`. The depth image showed the person. The 32 px box was a background hit, not the face.
+
+YuNet only looks for faces of about 10–300 px. On this camera a face nearer than ~30 cm is larger than 300 px, so the real face was skipped. Detection now also runs on a half-size and a quarter-size copy, drops boxes under 48 px, and if the laser-on image still has no usable face it tries the laser-off image. The smallest accepted face is 80 px, so a face at the far end of 60 cm is not called too small. Restart `liveness.watch` or the API to load this.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.
