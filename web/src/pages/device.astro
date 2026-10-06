@@ -1,0 +1,42 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Device — Face-ID" current="device">
+  <h1>Device</h1>
+  <p class="lead">What the API can see on the USB bus. OpenAPI docs stay on the API at <code>/docs</code>.</p>
+  <section class="panel">
+    <p id="status" class="result"></p>
+    <dl id="info"></dl>
+  </section>
+</Base>
+
+<script>
+  const status = document.querySelector("#status");
+  const info = document.querySelector("#info");
+
+  function row(label: string, value: string): void {
+    if (!info) return;
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const data = document.createElement("dd");
+    data.textContent = value;
+    info.append(term, data);
+  }
+
+  const response = await fetch("/v1/device/info");
+  const body = await response.json();
+  if (!response.ok) {
+    if (status) {
+      status.textContent = body.detail ?? "camera unavailable";
+      status.className = "result error";
+    }
+  } else if (status && info) {
+    status.textContent = "connected";
+    status.className = "result ok";
+    row("name", body.name);
+    row("serial", body.serial);
+    row("firmware", body.firmware);
+    row("product", body.product_line ?? "—");
+  }
+</script>

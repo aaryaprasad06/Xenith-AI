@@ -8,10 +8,12 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.142.2",
     "numpy>=2.5.3",
     "opencv-python>=5.0.0.93",
     "pyrealsense2>=2.58.4.10922",
     "pyyaml>=6.0.3",
+    "uvicorn>=0.54.0",
 ]
 
 [tool.uv]
@@ -23,6 +25,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=9.1.1",
     "ruff>=0.16.10",
 ]

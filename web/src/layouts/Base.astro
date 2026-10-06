@@ -1,0 +1,31 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  current: "preview" | "users" | "device";
+}
+
+const { title, current } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header>
+      <strong>Face-ID</strong>
+      <nav>
+        <a href="/" aria-current={current === "preview" ? "page" : undefined}>Preview</a>
+        <a href="/users" aria-current={current === "users" ? "page" : undefined}>People</a>
+        <a href="/device" aria-current={current === "device" ? "page" : undefined}>Device</a>
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>

@@ -58,6 +58,32 @@ Two windows open:
 
 Press `q` in either window to quit.
 
+## API and web console
+
+The HTTP API follows the RealSenseID-REST layout: a FastAPI app, `/v1` routers
+for auth, users, preview, and device, and one camera wrapper behind them.
+The console is an Astro app in `web/`, installed with pnpm. It is not the
+RealSenseID NiceGUI, and it does not talk to an F4xx module.
+
+```bash
+cp .env.example .env   # set FACE_ID_ADMIN_TOKEN
+./dev.sh
+```
+
+That starts the API on http://127.0.0.1:8000 and the console on http://127.0.0.1:4321. Ctrl+C stops both. OpenAPI docs: http://127.0.0.1:8000/docs
+
+The first time, install the console packages: `cd web && pnpm install`.
+
+The console proxies `/v1`, `/health`, `/authenticate`, and `/admin` to the API.
+
+| Page | What it calls |
+| --- | --- |
+| Preview | `GET /v1/preview/stream` (MJPEG of the left IR image), `POST /v1/auth` |
+| People | `GET/POST/DELETE /v1/users` with `Authorization: Bearer <token>` |
+| Device | `GET /v1/device/info` |
+
+`POST /authenticate`, `POST /admin/enroll`, and `DELETE /admin/person/{id}` are the same operations under the names in the PRD. Enrolment stores the id only. Matching still returns denied, because liveness and embeddings are not built yet.
+
 ### Checking distance against a tape measure
 
 1. Point the camera at a flat **black or green** surface so the center box lies

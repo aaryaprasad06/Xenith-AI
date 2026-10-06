@@ -1,0 +1,43 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Preview — Face-ID" current="preview">
+  <h1>Preview</h1>
+  <p class="lead">
+    Left infrared from the D435. Authenticate asks the API for a decision.
+    Matching is not built yet, so a working camera still returns denied.
+  </p>
+  <section class="panel">
+    <img class="stream" src="/v1/preview/stream" alt="Live infrared preview" />
+    <div class="row">
+      <button id="auth" type="button">Authenticate</button>
+      <span id="health"></span>
+    </div>
+    <p id="result" class="result"></p>
+  </section>
+</Base>
+
+<script>
+  const health = document.querySelector("#health");
+  const result = document.querySelector("#result");
+  const auth = document.querySelector("#auth");
+
+  async function refreshHealth(): Promise<void> {
+    const response = await fetch("/health");
+    const body = await response.json();
+    if (health) health.textContent = `camera: ${body.camera}`;
+  }
+
+  auth?.addEventListener("click", async () => {
+    if (!result) return;
+    result.textContent = "asking…";
+    const response = await fetch("/v1/auth", { method: "POST" });
+    const body = await response.json();
+    result.textContent = `${body.decision}\n${body.status}\n${body.reason}`;
+  });
+
+  refreshHealth().catch((error: unknown) => {
+    if (health) health.textContent = error instanceof Error ? error.message : "API unreachable";
+  });
+</script>

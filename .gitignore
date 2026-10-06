@@ -9,5 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
+# Local face-id data and the web app build
+data/
+web/node_modules/
+web/dist/
+web/.astro/
+
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/

@@ -100,6 +100,18 @@ Still open inside step 1, none of them blocking the distance check:
 
 Next feature step, when started, is PRD step 3: YuNet face detect, 112×112 align, and the quality gate. Step 2 (Pi) stays deferred.
 
+## 2026-10-06 — API and console, after RealSenseID-REST
+
+Looked at [RealSenseID-REST](https://github.com/realsenseai/RealSenseID-REST). That project is a FastAPI process in front of an F4xx face module: `/v1` routers for auth, users, preview, and device, one device wrapper, and a small console. Their console is NiceGUI, and their utility routes flash F4xx firmware. Neither of those belongs on this D435.
+
+What landed here, in our own code:
+
+- `api/` — FastAPI. `CameraHub` owns the one D435 pipeline. `UserStore` is a SQLite id list in `data/users.db` (gitignored). Routers: `POST /v1/auth`, users enrol/list/delete, `GET /v1/preview/stream` (MJPEG of the left IR image), `GET /v1/device/info`. The PRD names also work: `POST /authenticate`, `GET /health`, `POST /admin/enroll`, `DELETE /admin/person/{id}`. Enrol and delete need `Authorization: Bearer` matching `FACE_ID_ADMIN_TOKEN`.
+- `web/` — Astro, package manager pnpm. Pages: Preview, People, Device. Dev server proxies the API so the browser stays on port 4321.
+- Auth always denies. The reason is either the camera is down, or liveness and matching are not built. Enrolment does not save a face image and does not compute an embedding.
+
+Still not the door: no state machine, no relay, no access log.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

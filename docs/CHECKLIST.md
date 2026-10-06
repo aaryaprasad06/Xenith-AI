@@ -3,7 +3,7 @@
 Tracks the build against [PRD.md](PRD.md). Tick items as they are done.
 
 **Platform:** current x86_64 Linux machine. Raspberry Pi work is deferred.
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-06
 
 Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
@@ -16,7 +16,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 | 3. Detect + align + quality gate | To do |
 | 4. Baseline identity | To do |
 | 5. Geometry liveness | To do |
-| 6. Door control | To do |
+| 6. Door control | API shell started (no state machine, relay, or log yet) |
 | 7. Attack dataset + learned liveness + fusion | To do |
 | 8. Improve identity | To do |
 | 9. Evaluation + threshold tuning | To do |
@@ -87,10 +87,11 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [ ] `control/relay.py`: relay interface + **mock relay** (logs lock/unlock) for the dev machine
 - [ ] Auto re-lock after `unlock_seconds`
 - [ ] Lockout after `max_failures`, cooldown `cooldown_seconds`
-- [ ] `control/api.py` (FastAPI): `POST /authenticate`, `GET /health`
-- [ ] Admin endpoints: `POST /admin/enroll`, `DELETE /admin/person/{id}` with admin token
+- [x] FastAPI app in `api/` (RealSenseID-REST shape: `/v1/auth`, `/v1/users`, `/v1/preview`, `/v1/device`), plus PRD aliases `POST /authenticate`, `GET /health`, `POST /admin/enroll`, `DELETE /admin/person/{id}`
+- [x] Admin token on enrol and delete (`FACE_ID_ADMIN_TOKEN`)
+- [x] Astro console in `web/` (pnpm): preview, people, device
 - [ ] `logging_/access_log.py`: SQLite `access_events`, log every attempt including spoofs
-- [ ] Add fastapi, uvicorn
+- [x] Add fastapi, uvicorn
 - [ ] Unit tests: state-machine transitions
 - [ ] **Check:** end-to-end unlock for a live enrolled person; denied for a spoof
 - [~] Real GPIO relay on the Pi (`RPi.GPIO`, 12 V strike, fail-secure NO/COM)

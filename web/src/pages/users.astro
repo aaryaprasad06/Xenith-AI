@@ -1,0 +1,94 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="People — Face-ID" current="users">
+  <h1>People</h1>
+  <p class="lead">
+    Enrolment stores the id only. Embeddings, consent, and liveness checks come later.
+    The admin token is the value of <code>FACE_ID_ADMIN_TOKEN</code>.
+  </p>
+  <section class="panel">
+    <div class="row">
+      <input id="token" type="password" placeholder="admin token" autocomplete="current-password" />
+      <button id="save-token" class="quiet" type="button">Save token</button>
+    </div>
+    <form id="enroll" class="row">
+      <input id="user-id" type="text" placeholder="user id" required maxlength="100" />
+      <button type="submit">Enrol</button>
+    </form>
+    <p id="message" class="result"></p>
+    <ul id="people" class="people"></ul>
+  </section>
+</Base>
+
+<script>
+  import { authHeaders, readToken, saveToken } from "../lib/admin";
+
+  const tokenInput = document.querySelector<HTMLInputElement>("#token");
+  const message = document.querySelector("#message");
+  const list = document.querySelector("#people");
+  const form = document.querySelector<HTMLFormElement>("#enroll");
+  const userId = document.querySelector<HTMLInputElement>("#user-id");
+
+  if (tokenInput) tokenInput.value = readToken();
+
+  function show(text: string, ok = false): void {
+    if (!message) return;
+    message.textContent = text;
+    message.className = ok ? "result ok" : "result error";
+  }
+
+  async function refresh(): Promise<void> {
+    const response = await fetch("/v1/users", { headers: authHeaders() });
+    const body = await response.json();
+    if (!response.ok) {
+      show(body.detail ?? "could not list people");
+      if (list) list.replaceChildren();
+      return;
+    }
+    show(`${body.users.length} enrolled`, true);
+    if (!list) return;
+    list.replaceChildren();
+    for (const person of body.users) {
+      const item = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = `${person.user_id} · ${person.created_at}`;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "danger";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", async () => {
+        const deleted = await fetch(`/v1/users/${encodeURIComponent(person.user_id)}`, {
+          method: "DELETE",
+          headers: authHeaders(),
+        });
+        const payload = await deleted.json();
+        if (!deleted.ok) show(payload.detail ?? "delete failed");
+        await refresh();
+      });
+      item.append(name, remove);
+      list.append(item);
+    }
+  }
+
+  document.querySelector("#save-token")?.addEventListener("click", () => {
+    saveToken(tokenInput?.value ?? "");
+    refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "failed"));
+  });
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const id = userId?.value.trim() ?? "";
+    const response = await fetch(`/v1/users/enroll?user_id=${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    const body = await response.json();
+    show(response.ok ? body.message : (body.detail ?? "enrol failed"), response.ok);
+    if (response.ok && userId) userId.value = "";
+    await refresh();
+  });
+
+  refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "API unreachable"));
+</script>
