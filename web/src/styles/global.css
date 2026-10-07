@@ -25,11 +25,11 @@
 }
 
 @font-face {
-  font-family: "Mona Sans Fallback";
-  src: local("Segoe UI");
+  font-family: "Intel One Mono Fallback";
+  src: local("Cascadia Mono"), local("Consolas");
   size-adjust: 105%;
-  ascent-override: 92%;
-  descent-override: 24%;
+  ascent-override: 90%;
+  descent-override: 22%;
   line-gap-override: 0%;
 }
 
@@ -41,7 +41,7 @@ body {
   background: var(--ground);
   color: var(--ink);
   color-scheme: dark;
-  font-family: "Mona Sans Variable", "Mona Sans Fallback", "Segoe UI", sans-serif;
+  font-family: "Intel One Mono Variable", "Intel One Mono Fallback", Consolas, monospace;
   font-size: 1rem;
   font-weight: 530;
   line-height: 1.5;
