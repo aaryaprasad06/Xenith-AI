@@ -144,7 +144,43 @@ Alan confirmed the live liveness check works on this D435 (serial `236422073835`
 
 What that pass covers: YuNet finds the face on the IR image, five laser-on frames agree, a laser-off frame is in the window, and the depth shape is accepted under the starting thresholds in `configs/default.yaml` (`relief_min_m` 0.015, `flat_max_m` 0.005, `nose_cheek_min_m` 0.008, closest face 0.10 m, smallest face 80 px).
 
-Still open: blur, tuning those relief numbers from more people, a printed photo, a phone screen, and any DepthFake projector test. A live result still does not unlock the door. Identity matching is not built. 3D masks remain out of scope.
+Still open: blur, tuning those relief numbers from more people, a printed photo, a phone screen, and any DepthFake projector test. A live result still does not unlock the door. Identity matching is not built. 3D masks remain out of scope for this build. The thermal follow-up is [phase 2](CHECKLIST.md).
+
+## 2026-10-07 — Silicone masks, and why thermal waits
+
+Question for this session: can this D435 reject a realistic silicone mask, and would a thermal camera do it. No mask was put in front of the camera. This is from the papers, not a new recording. Decision: silicone stays out of the current build. It is phase 2, and the sensor for that phase is thermal. The print and screen target (above 95%) does not move.
+
+What the D435 already measures will not catch a mask worn on a real head.
+
+- The relief gate (1.5 cm) is for flat things. A mask is a shell a few millimetres thick on a real nose and cheeks. At the door distance, 0.3–0.6 m, stereo depth noise is about that thick, so the shell does not show up as a second surface. Hole filling makes the rim even easier to miss.
+- Eyes-open does not help. The wearer's real eyes are in the cutouts.
+- The clean IR image is a weak separator for soft silicone. On a RealSense in the same near-infrared band, the ordinary texture stats of a 3D mask overlap a real face (Bhattacharjee and Marcel, BIOSIG 2017). Painted brows disappear. A rigid mask looks smoother. A soft one does not fall out of the live distribution.
+- Colour and pulse are the wrong add for this door. A custom silicone mask already fools colour face matchers at more than ten times their normal false-match rate (Bhattacharjee et al., BTAS 2018). Pulse needs visible light and about a second of stillness, and the door has to work with the lights off in under 1.5 s.
+- The file `Research_and_Application_of_Face_Anti-Spoofing_Based_on_Depth_Camera_(DMF)_….md` is Aurora Guard (Liu et al.), not a thermal paper. A screen flashes a random colour sequence and a network recovers depth from the reflection. They did not collect 3D masks. On their print and screen set, EER is 1.24% and HTER is 1.91%. Against an SR300 on paper, twisted paper, carved paper, an iPad, and a projector, their false-accept rate is 0.20% and the SR300's is 0.40% (100 tries each). That number is about flat attacks.
+
+Thermal is the cue that actually separates silicone, and only while the mask is cold.
+
+| Study | Setup | Result |
+| --- | --- | --- |
+| Bhattacharjee et al., BTAS 2018 | Seek Compact Pro. Score = mean temperature in the face box. Custom silicone. | Equal-error rate 7.5%. At 5% of attacks accepted, about 10% of real people are rejected. |
+| George et al., TIFS 2019 (WMCA) | SR300 colour, depth, and infrared, plus thermal. Prints, screens, and masks mixed. | Thermal alone 1.85% ACER. All four channels 0.3% ACER. Not a silicone-only number. |
+| Bhattacharjee and Marcel, BIOSIG 2017 | Thermal time-lapse of a worn silicone mask, frames 30 s apart. | Forehead, where the mask touches skin, ends near skin temperature. The mask is obviously cold in the first frame. |
+
+A live face is warmed by blood: inner eye corners, forehead, and cheeks warmer, nose tip cooler, nostrils dipping on a breath. Skin and silicone both radiate strongly in long-wave infrared, so the camera reads temperature, not a material colour. After the average matches, that one number no longer separates them. Silicone conducts heat poorly, so the outer surface shows a blurred contact patch, not the blood pattern. A 2020 thermal study that let masks warm on the wearer found detection got worse after that, and full-head flexible masks were the hardest because heat came through more evenly. A mid-wave paper says the plain version: raise the mask temperature and an ordinary thermal image of the mask looks like a face. Polarisation still separated them. A Lepton or a Seek does not measure that.
+
+What can remain after the average has caught up: a sharp cool edge at the neck or hairline if the frame includes it, rings at the eye and nostril holes, and warm blotches that follow contact instead of the warmer-cheek / cooler-nose layout. There is no published rate that says those leftovers stop most warmed, well-fitted masks. A cold mask held up at the door is the case the 7.5% figure describes. A mask put on before walking to the door is the miss.
+
+Hardware, if phase 2 is bought. Prices are street prices on 2026-10-07, not quotes.
+
+| Option | Image | Price | Fit |
+| --- | --- | --- | --- |
+| MLX90640, 55°, Adafruit | 32×24, I2C | $75 | About 10 pixels across a face at 0.5 m. Whole-face hot or cold only. |
+| FLIR Lepton 3.5 + PureThermal 2 | 160×120, USB webcam, 8.7 Hz, sensitivity under 50 mK, absolute error about ±5 °C | $172 + $110 ≈ $280 | About 50 pixels across the face. Shows up as a normal camera, so OpenCV can read it on the Pi. This is the one to buy. |
+| Seek Compact Pro | 320×240, export models under 9 Hz | $410–$500 | The camera behind the 7.5% result. Linux support is unofficial. |
+
+Use the shape of the heat map (centre against the rim), not a stored cutoff such as "nose above 32 °C". Absolute error on these modules is several degrees. Sensitivity inside one frame is about 0.05 °C.
+
+Phase 2 work, when it starts: bolt the Lepton next to this D435 (serial `236422073835`), calibrate a homography once, copy the face box from the IR detector, and score centre versus rim. Record cold masks, masks worn 30 s, masks worn several minutes, glasses, and people who just came in from the cold. Report the silicone miss rate on its own. Do not train that score on WMCA weights. Those frames are from an SR300.
 
 ## How to add an entry
 

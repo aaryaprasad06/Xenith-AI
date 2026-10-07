@@ -3,7 +3,7 @@
 Tracks the build against [PRD.md](PRD.md). Tick items as they are done.
 
 **Platform:** current x86_64 Linux machine. Raspberry Pi work is deferred.
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-07
 
 Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
@@ -21,6 +21,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 | 8. Improve identity | To do |
 | 9. Evaluation + threshold tuning | To do |
 | 10. Hardening | To do (Pi parts deferred) |
+| Phase 2. Silicone masks (thermal) | Later. Not part of the current print/screen target |
 
 ---
 
@@ -108,7 +109,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 ## Step 7: Attack dataset + learned liveness + fusion
 
 - [ ] Genuine data from 10-20 volunteers (bright / dim / dark, glasses, pose), written consent
-- [ ] Attack data on the same camera: matte and glossy prints, phone/tablet photo and video, paper masks, silicone/3D masks if available
+- [ ] Attack data on the same camera: matte and glossy prints, phone/tablet photo and video, paper masks. Silicone is phase 2 (thermal), not this IR model
 - [ ] Splits by person and by attack type; one attack type held out entirely
 - [ ] Preprocess to `data/processed/` (detect, align, crop, normalise depth)
 - [ ] `liveness/ir_model.py`: `LivenessNet` (2-channel 112×112)
@@ -142,6 +143,17 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [ ] USB dropout counter
 - [ ] ONNX INT8 quantisation
 - [~] Latency profiling and tuning on the Pi (target < 1.5 s)
+
+## Phase 2: Silicone masks (thermal)
+
+Later. Not part of steps 1–10 and not part of the "> 95% rejection" target, which is prints and screens. Research notes: [journal](journal.md), 2026-10-07. The D435 relief check passes a mask worn on a real head. A thermal camera is the add-on that separates a cold silicone mask from skin, and a mask that has already warmed up still gets through a temperature average. The score has to be the heat map (centre against the rim), and the silicone miss rate is reported on its own.
+
+- [ ] FLIR Lepton 3.5 + PureThermal 2 (~$280, 160×120, USB). Not the MLX90640 (32×24 is too coarse) and not the Seek Compact Pro unless Linux support is solved
+- [ ] Mount it beside the D435 and store one homography from a warm object
+- [ ] Read it as a USB camera. Copy the face box from the IR detector. Score centre versus rim, not a fixed nose temperature
+- [ ] Record, on this camera: live faces (glasses, just come in from the cold) and silicone masks cold, worn 30 s, and worn several minutes
+- [ ] Split by physical mask, not by frame
+- [ ] `eval/spoof_eval.py` reports silicone APCER on its own. Do not fold it into the print/screen number
 
 ## Cross-cutting
 
