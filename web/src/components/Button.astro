@@ -1,0 +1,15 @@
+---
+import { buttonClass, type ButtonVariant } from "../lib/button";
+
+interface Props {
+  variant?: ButtonVariant;
+  type?: "button" | "submit" | "reset";
+  id?: string;
+}
+
+const { variant = "primary", type = "button", id } = Astro.props;
+---
+
+<button id={id} type={type} class={buttonClass(variant)}>
+  <slot />
+</button>

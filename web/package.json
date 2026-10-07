@@ -10,6 +10,7 @@
     "preview": "astro preview --host 127.0.0.1 --port 4321"
   },
   "dependencies": {
+    "@fontsource-variable/mona-sans": "^5.3.0",
     "astro": "^5.14.1"
   }
 }

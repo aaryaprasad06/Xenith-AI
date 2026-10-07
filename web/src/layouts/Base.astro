@@ -1,4 +1,5 @@
 ---
+import "@fontsource-variable/mona-sans";
 import "../styles/global.css";
 
 interface Props {
@@ -17,7 +18,7 @@ const { title, current } = Astro.props;
   </head>
   <body>
     <header>
-      <strong>Face-ID</strong>
+      <a class="mark" href="/">Face-ID</a>
       <nav>
         <a href="/" aria-current={current === "preview" ? "page" : undefined}>Preview</a>
         <a href="/users" aria-current={current === "users" ? "page" : undefined}>People</a>

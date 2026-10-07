@@ -1,29 +1,28 @@
 ---
+import Button from "../components/Button.astro";
 import Base from "../layouts/Base.astro";
 ---
 
 <Base title="People — Face-ID" current="users">
-  <h1>People</h1>
-  <p class="lead">
-    Enrolment stores the id only. Embeddings, consent, and liveness checks come later.
-    The admin token is the value of <code>FACE_ID_ADMIN_TOKEN</code>.
-  </p>
-  <section class="panel">
-    <div class="row">
-      <input id="token" type="password" placeholder="admin token" autocomplete="current-password" />
-      <button id="save-token" class="quiet" type="button">Save token</button>
+  <div class="stack">
+    <h1>Enrol a person</h1>
+    <p class="note">Only an id is stored. Matching comes later, so the door stays locked.</p>
+    <div class="token">
+      <input id="token" type="password" placeholder="Admin token" autocomplete="current-password" />
+      <Button id="save-token" variant="quiet" type="button">Save token</Button>
     </div>
-    <form id="enroll" class="row">
-      <input id="user-id" type="text" placeholder="user id" required maxlength="100" />
-      <button type="submit">Enrol</button>
+    <form id="enroll" class="enroll">
+      <input id="user-id" type="text" placeholder="Name or id" required maxlength="100" autocomplete="off" />
+      <Button type="submit">Enrol</Button>
     </form>
-    <p id="message" class="result"></p>
+    <p id="message" class="result" role="status"></p>
     <ul id="people" class="people"></ul>
-  </section>
+  </div>
 </Base>
 
 <script>
   import { authHeaders, readToken, saveToken } from "../lib/admin";
+  import { buttonClass } from "../lib/button";
 
   const tokenInput = document.querySelector<HTMLInputElement>("#token");
   const message = document.querySelector("#message");
@@ -35,28 +34,52 @@ import Base from "../layouts/Base.astro";
 
   function show(text: string, ok = false): void {
     if (!message) return;
-    message.textContent = text;
-    message.className = ok ? "result ok" : "result error";
+    const trimmed = text.trim();
+    message.textContent = trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : trimmed;
+    message.className = ok ? "result" : "result bad";
   }
 
-  async function refresh(): Promise<void> {
+  function when(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  async function refresh(preserveMessage = false): Promise<void> {
     const response = await fetch("/v1/users", { headers: authHeaders() });
     const body = await response.json();
     if (!response.ok) {
-      show(body.detail ?? "could not list people");
+      if (!preserveMessage) show(body.detail ?? "Could not list people");
       if (list) list.replaceChildren();
       return;
     }
-    show(`${body.users.length} enrolled`, true);
+    if (!preserveMessage && message) {
+      if (body.users.length === 0) show("No one is enrolled yet.", true);
+      else {
+        message.textContent = "";
+        message.className = "result";
+      }
+    }
     if (!list) return;
     list.replaceChildren();
     for (const person of body.users) {
       const item = document.createElement("li");
       const name = document.createElement("span");
-      name.textContent = `${person.user_id} · ${person.created_at}`;
+      name.className = "person";
+      name.textContent = person.user_id;
+      const time = document.createElement("span");
+      time.className = "when";
+      time.textContent = when(person.created_at);
+      name.append(time);
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "danger";
+      remove.className = buttonClass("danger");
       remove.textContent = "Delete";
       remove.addEventListener("click", async () => {
         const deleted = await fetch(`/v1/users/${encodeURIComponent(person.user_id)}`, {
@@ -64,8 +87,8 @@ import Base from "../layouts/Base.astro";
           headers: authHeaders(),
         });
         const payload = await deleted.json();
-        if (!deleted.ok) show(payload.detail ?? "delete failed");
-        await refresh();
+        if (!deleted.ok) show(payload.detail ?? "Delete failed");
+        await refresh(!deleted.ok);
       });
       item.append(name, remove);
       list.append(item);
@@ -74,7 +97,7 @@ import Base from "../layouts/Base.astro";
 
   document.querySelector("#save-token")?.addEventListener("click", () => {
     saveToken(tokenInput?.value ?? "");
-    refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "failed"));
+    refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "Could not reach the API"));
   });
 
   form?.addEventListener("submit", async (event) => {
@@ -85,10 +108,10 @@ import Base from "../layouts/Base.astro";
       headers: authHeaders(),
     });
     const body = await response.json();
-    show(response.ok ? body.message : (body.detail ?? "enrol failed"), response.ok);
+    show(response.ok ? body.message : (body.detail ?? "Enrolment failed"), response.ok);
     if (response.ok && userId) userId.value = "";
-    await refresh();
+    await refresh(true);
   });
 
-  refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "API unreachable"));
+  refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "The API is unreachable."));
 </script>

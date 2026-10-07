@@ -3,15 +3,15 @@ import Base from "../layouts/Base.astro";
 ---
 
 <Base title="Device — Face-ID" current="device">
-  <h1>Device</h1>
-  <p class="lead">What the API can see on the USB bus. OpenAPI docs stay on the API at <code>/docs</code>.</p>
-  <section class="panel">
-    <p id="status" class="result"></p>
+  <div class="stack">
+    <h1 id="title">On the bus</h1>
+    <p id="status" class="note"></p>
     <dl id="info"></dl>
-  </section>
+  </div>
 </Base>
 
 <script>
+  const title = document.querySelector("#title");
   const status = document.querySelector("#status");
   const info = document.querySelector("#info");
 
@@ -27,16 +27,17 @@ import Base from "../layouts/Base.astro";
   const response = await fetch("/v1/device/info");
   const body = await response.json();
   if (!response.ok) {
+    if (title) title.textContent = "No camera on the bus";
     if (status) {
-      status.textContent = body.detail ?? "camera unavailable";
-      status.className = "result error";
+      const detail = String(body.detail ?? "The camera is not connected.");
+      status.textContent = detail.charAt(0).toUpperCase() + detail.slice(1);
+      status.className = "note bad";
     }
-  } else if (status && info) {
-    status.textContent = "connected";
-    status.className = "result ok";
-    row("name", body.name);
-    row("serial", body.serial);
-    row("firmware", body.firmware);
-    row("product", body.product_line ?? "—");
+  } else if (title && info) {
+    title.textContent = body.name;
+    if (status) status.textContent = "";
+    row("Serial", body.serial);
+    row("Firmware", body.firmware);
+    if (body.product_line) row("Product", body.product_line);
   }
 </script>

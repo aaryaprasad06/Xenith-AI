@@ -1,44 +1,85 @@
 ---
+import Button from "../components/Button.astro";
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="Preview — Face-ID" current="preview">
-  <h1>Preview</h1>
-  <p class="lead">
-    Left infrared from the D435. Authenticate runs the depth liveness check.
-    A live face is still denied until identity matching exists, so the door stays locked.
-    A flat photo or phone screen should come back rejected.
+<Base title="Face-ID" current="preview">
+  <div class="hero">
+    <h1>The face in this frame</h1>
+    <Button id="auth" type="button">Authenticate</Button>
+  </div>
+  <img
+    class="stream"
+    src="/v1/preview/stream"
+    alt="Live infrared from the depth camera"
+  />
+  <p class="note">
+    Depth decides whether it is a person, so a flat photo should fail.
+    <span id="health"></span>
   </p>
-  <section class="panel">
-    <img class="stream" src="/v1/preview/stream" alt="Live infrared preview" />
-    <div class="row">
-      <button id="auth" type="button">Authenticate</button>
-      <span id="health"></span>
-    </div>
-    <p id="result" class="result"></p>
-  </section>
+  <p id="result" class="result" role="status"></p>
 </Base>
 
 <script>
   const health = document.querySelector("#health");
   const result = document.querySelector("#result");
-  const auth = document.querySelector("#auth");
+  const auth = document.querySelector<HTMLButtonElement>("#auth");
+  const stream = document.querySelector<HTMLImageElement>(".stream");
+
+  function holdFrame(): void {
+    if (!stream || stream.dataset.fallback === "1") return;
+    stream.dataset.fallback = "1";
+    stream.src =
+      "data:image/svg+xml;charset=utf-8," +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"><rect width="16" height="9" fill="#12161c"/></svg>',
+      );
+  }
+
+  stream?.addEventListener("error", holdFrame);
+  if (stream?.complete && stream.naturalWidth === 0) holdFrame();
+
+  const cameraLine: Record<string, string> = {
+    streaming: "The camera is streaming.",
+    starting: "The camera is starting.",
+    disabled: "The camera is off.",
+    error: "The camera is not connected.",
+  };
 
   async function refreshHealth(): Promise<void> {
     const response = await fetch("/health");
     const body = await response.json();
-    if (health) health.textContent = `camera: ${body.camera}`;
+    if (health) {
+      const line = cameraLine[body.camera] ?? "The camera is not connected.";
+      health.textContent = ` ${line}`;
+      health.className = body.camera === "streaming" || body.camera === "starting" ? "" : "bad";
+    }
   }
 
   auth?.addEventListener("click", async () => {
-    if (!result) return;
-    result.textContent = "asking…";
-    const response = await fetch("/v1/auth", { method: "POST" });
-    const body = await response.json();
-    result.textContent = `${body.decision}\n${body.status}\n${body.reason}`;
+    if (!result || !auth) return;
+    auth.disabled = true;
+    result.className = "result";
+    result.textContent = "Checking depth.";
+    try {
+      const response = await fetch("/v1/auth", { method: "POST" });
+      const body = await response.json();
+      const raw = typeof body.reason === "string" ? body.reason : "";
+      const reason = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
+      const live = body.status === "live";
+      result.className = live ? "result good" : "result bad";
+      result.textContent = live ? `Live. ${reason}` : `Denied. ${reason}`;
+    } catch (error: unknown) {
+      result.className = "result bad";
+      result.textContent = error instanceof Error ? error.message : "The check did not finish.";
+    } finally {
+      auth.disabled = false;
+    }
   });
 
   refreshHealth().catch((error: unknown) => {
-    if (health) health.textContent = error instanceof Error ? error.message : "API unreachable";
+    if (health) {
+      health.textContent = ` ${error instanceof Error ? error.message : "The API is unreachable."}`;
+    }
   });
 </script>
