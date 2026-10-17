@@ -65,7 +65,7 @@ def detection_at(x: float = BOX[0], y: float = BOX[1]) -> Detection:
 
 def frame(depth: np.ndarray, emitter: str = "on") -> Frame:
     return Frame(
-        ir=np.zeros((H, W), dtype=np.uint8),
+        ir=np.random.default_rng(0).integers(0, 256, size=(H, W), dtype=np.uint8),
         depth=depth,
         intrinsics=intrinsics(),
         timestamp=0.0,

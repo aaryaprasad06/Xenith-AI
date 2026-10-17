@@ -14,7 +14,7 @@ Pi 4 the PRD names. Pi-specific work is deferred; see the status table.
 | 2. Pi build | Deferred: running on this machine for now |
 | 3. Detect + align + quality gate | YuNet, 112×112 align, and the quality checks except blur |
 | 4. Baseline identity (embed + match) | Not started |
-| 5. Geometry liveness | Depth shape gate is in. Print and screen tests are not |
+| 5. Geometry liveness | Depth shape gate is in. A printed photo and a phone screen are rejected |
 | 6. Door control (API, relay, state machine, log) | API and console are in. No state machine, relay, or log |
 | 7-10. Learned liveness, tuning, evaluation, hardening | Not started (Pi-specific parts of step 10 deferred) |
 

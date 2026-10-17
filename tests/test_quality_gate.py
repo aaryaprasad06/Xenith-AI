@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pytest
 
@@ -37,6 +38,33 @@ def test_distance_and_size_and_centre():
 
     side = assess_quality(_depth(0.45), x=0, y=180, width=120, height=120, quality=QUALITY)
     assert side.reason == "move to the centre of the camera"
+
+
+def _ir(blurred: bool) -> np.ndarray:
+    rng = np.random.default_rng(0)
+    ir = rng.integers(0, 256, size=(480, 848), dtype=np.uint8)
+    return cv2.GaussianBlur(ir, (0, 0), 6) if blurred else ir
+
+
+def test_blur_check_rejects_a_blurred_face_and_passes_a_sharp_one():
+    quality = {**QUALITY, "blur_min": 20.0}
+    box = {"x": 364, "y": 180, "width": 120, "height": 120, "quality": quality}
+    sharp = assess_quality(_depth(0.45), ir=_ir(False), **box)
+    assert sharp.ok is True
+    assert sharp.sharpness is not None and sharp.sharpness >= 20.0
+
+    blurry = assess_quality(_depth(0.45), ir=_ir(True), **box)
+    assert blurry.ok is False
+    assert "blurry" in blurry.reason
+    assert blurry.sharpness is not None and blurry.sharpness < sharp.sharpness
+
+
+def test_blur_check_is_skipped_without_ir_or_threshold():
+    box = {"x": 364, "y": 180, "width": 120, "height": 120}
+    no_ir = assess_quality(_depth(0.45), quality={**QUALITY, "blur_min": 20.0}, **box)
+    assert no_ir.ok is True and no_ir.sharpness is None
+    no_threshold = assess_quality(_depth(0.45), quality=QUALITY, ir=_ir(True), **box)
+    assert no_threshold.ok is True
 
 
 def test_principal_point_deprojects_to_the_optical_axis():

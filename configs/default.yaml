@@ -1,5 +1,8 @@
 # auto_exposure_limit_us stops the IR image clipping to white on a close wall.
 # Without it the laser-on frame saturates and the center distance stays n/a.
+# blur_min (Laplacian variance of the IR face crop) is left unset, so the blur
+# check is off: on this D435 it did not separate sharp from blurred faces
+# (journal, 2026-10-18). Measure with `python -m liveness.tune_blur`.
 # rgb adds the colour camera, mapped into the IR viewport (Frame.rgb).
 camera: {width: 848, height: 480, fps: 30, depth_units: 0.0001, auto_exposure_limit_us: 3000, rgb: true}
 quality: {min_dist_m: 0.10, max_dist_m: 0.60, min_face_px: 80, max_hole_frac: 0.2}

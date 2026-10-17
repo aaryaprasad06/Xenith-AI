@@ -13,9 +13,9 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 | --- | --- |
 | 1. Environment + capture | Implemented; tape check passed (not on white, not past 100 cm) |
 | 2. Pi build | Deferred |
-| 3. Detect + align + quality gate | Detect, align, and most quality checks are in. A real face is found, including under 30 cm. Blur is not |
+| 3. Detect + align + quality gate | Detect, align, and most quality checks are in. A real face is found, including under 30 cm. Blur check is built but off: Laplacian variance did not separate blur on this camera |
 | 4. Baseline identity | To do |
-| 5. Geometry liveness | Live check passed on a real face (2026-10-06). Thresholds are still the starting values. A print/screen test is not done |
+| 5. Geometry liveness | Live check passed on a real face (2026-10-06). A printed photo and a phone screen were rejected (2026-10-18). Thresholds are still the starting values |
 | 6. Door control | API shell started (no state machine, relay, or log yet) |
 | 7. Attack dataset + learned liveness + fusion | To do |
 | 8. Improve identity | To do |
@@ -57,7 +57,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] `capture/quality_gate.py`: no face / multiple faces (applied in `liveness/session.py`)
 - [x] Quality gate: distance outside 0.10-0.60 m (median depth in face box)
 - [x] Quality gate: face too small (< ~80 px) or off-centre
-- [ ] Quality gate: blur (variance of Laplacian)
+- [ ] Quality gate: blur. Laplacian variance was built and measured 2026-10-18 and does not work on this camera, so `blur_min` is unset. Needs a different measure, or may not be needed at a 3 ms exposure
 - [x] Quality gate: too many invalid depth pixels (> ~20%)
 - [x] User prompts for each rejection (the auth reason and the `liveness.watch` overlay)
 - [x] Unit tests for the gate rules
@@ -80,7 +80,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [ ] Thresholds from own data (`relief_min_m`, `flat_max_m`). The config still has the starting values: 1.5 cm and 0.5 cm
 - [x] Unit tests on synthetic flat and curved point clouds
 - [x] **Check:** a real face passes. Confirmed 2026-10-06 on this D435, including closer than 30 cm. The overlay reports the face as live. The door stays locked because identity matching is not built.
-- [ ] **Check:** rejects printed photos and phone screens in a first attack test
+- [x] **Check:** rejects printed photos and phone screens in a first attack test. Confirmed 2026-10-18 on this D435. No rejection rate measured yet.
 
 ## Step 6: Door control
 

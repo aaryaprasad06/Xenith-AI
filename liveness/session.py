@@ -95,6 +95,7 @@ def judge_window(
                 landmarks=face.landmarks,
                 quality=cfg["quality"],
                 liveness=cfg["liveness"],
+                ir=frame.ir,
             )
         )
 

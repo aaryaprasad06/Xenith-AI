@@ -1,7 +1,9 @@
 """Reject a frame before liveness when the face is not usable.
 
-Blur is not checked here yet. Depth-island size is measured by the caller
-and is not a hard fail: a real face against a white wall is an island of depth.
+Blur is the variance of the Laplacian of the IR face crop. It is only checked
+when the caller passes the IR image and the config has `blur_min`. Depth-island
+size is measured by the caller and is not a hard fail: a real face against a
+white wall is an island of depth.
 """
 
 from __future__ import annotations
@@ -9,10 +11,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import cv2
 import numpy as np
 
 # Face centre must sit inside this fraction of the frame, on both axes.
 CENTRE_MARGIN = 0.15
+# The crop is resized to this size before measuring, so the score does not depend
+# on how close the face is. INTER_AREA averaging also smooths the fine projector
+# dots that sit on a laser-on IR image and would otherwise read as sharp edges.
+SHARPNESS_SIZE = 112
 
 
 @dataclass(frozen=True)
@@ -21,6 +28,17 @@ class QualityReport:
     reason: str
     hole_frac: float
     distance_m: float | None
+    sharpness: float | None = None
+
+
+def sharpness(ir: np.ndarray, x: float, y: float, width: float, height: float) -> float | None:
+    """Variance of the Laplacian of the face crop. Higher is sharper, None if no crop."""
+    roi = _roi(ir, x, y, width, height)
+    if roi is None:
+        return None
+    x0, y0, x1, y1 = roi
+    crop = cv2.resize(ir[y0:y1, x0:x1], (SHARPNESS_SIZE, SHARPNESS_SIZE), interpolation=cv2.INTER_AREA)
+    return float(cv2.Laplacian(crop, cv2.CV_64F).var())
 
 
 def _roi(
@@ -44,6 +62,7 @@ def assess_quality(
     width: float,
     height: float,
     quality: dict[str, Any],
+    ir: np.ndarray | None = None,
 ) -> QualityReport:
     """One face box against the quality section of the config."""
     min_face_px = float(quality["min_face_px"])
@@ -115,4 +134,19 @@ def assess_quality(
             hole_frac=hole_frac,
             distance_m=distance,
         )
-    return QualityReport(ok=True, reason="ok", hole_frac=hole_frac, distance_m=distance)
+
+    score = None
+    blur_min = quality.get("blur_min")
+    if ir is not None and blur_min is not None:
+        score = sharpness(ir, x, y, width, height)
+        if score is not None and score < float(blur_min):
+            return QualityReport(
+                ok=False,
+                reason=f"face is blurry (sharpness {score:.1f}, need {float(blur_min):.1f}); hold still",
+                hole_frac=hole_frac,
+                distance_m=distance,
+                sharpness=score,
+            )
+    return QualityReport(
+        ok=True, reason="ok", hole_frac=hole_frac, distance_m=distance, sharpness=score
+    )

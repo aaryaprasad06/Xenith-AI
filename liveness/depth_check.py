@@ -187,9 +187,10 @@ def check_geometry(
     landmarks: np.ndarray,
     quality: dict[str, Any],
     liveness: dict[str, Any],
+    ir: np.ndarray | None = None,
 ) -> GeometryReport:
     gate: QualityReport = assess_quality(
-        depth, x=x, y=y, width=width, height=height, quality=quality
+        depth, x=x, y=y, width=width, height=height, quality=quality, ir=ir
     )
     relief, gap = (None, None)
     if gate.reason != "face box is outside the image":

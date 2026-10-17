@@ -263,6 +263,40 @@ These datasets usually require a license agreement signed by a supervisor, not a
 
 Next: R1, the evaluation harness (`eval/far_frr.py`) and one `Embedder` interface (`face/embed.py`), so candidate models can be compared on recorded takes.
 
+## 2026-10-18 — Printed photo and phone screen rejected
+
+Alan tested a printed photo and a phone screen on this D435 (serial `236422073835`) with `uv run python -m liveness.watch`. Both were rejected. A real face still reads `live`.
+
+Config was unchanged: the starting thresholds in `configs/default.yaml` (`relief_min_m` 0.015, `flat_max_m` 0.005, `nose_cheek_min_m` 0.008). A flat target has almost no depth relief, so the shape check rejects it before any matching would run.
+
+This is a first attack test, not a measured rejection rate. The number of tries, distances and relief readings were not recorded. The PRD's above-95% figure needs recorded spoof takes (`capture/recorder.py`) and the spoof evaluation.
+
+Still open: a bent or curved print, a tablet, video replay, glossy against matte prints, and tuning the thresholds from more people.
+
+## 2026-10-18 — Blur check added
+
+`capture/quality_gate.py` now scores sharpness as the variance of the Laplacian of the IR face crop, and rejects the face when it is below `quality.blur_min` in `configs/default.yaml` (placeholder `20.0`). The crop is resized to 112×112 first, so the score does not change with distance, and the area averaging also smooths the projector dots on laser-on frames, which would otherwise read as sharp edges. The check runs only when the IR image is passed in and `blur_min` is set; `check_geometry` and `judge_window` now pass `frame.ir`. The reject reason prints the score.
+
+Not run on the camera yet. Next: read the score on a still face, a moving face and a defocused one, and set `blur_min` between them. 60 tests pass, including a sharp and a blurred synthetic image.
+
+## 2026-10-18 — Blur check measured: Laplacian variance does not work here
+
+Alan ran `uv run python -m liveness.tune_blur` on this D435 (serial `236422073835`), no glasses, holding still, then moving, then leaning in close. Score = variance of the Laplacian of the 112×112 IR face crop.
+
+| Tag | Frames | Laser-on p5 / median / max | Laser-off p5 / median / max |
+| --- | --- | --- | --- |
+| sharp | 611 | 321.9 / 393.4 / 1406.7 | 2.6 / 4.0 / 37.0 |
+| moving | 192 | 371.4 / 499.0 / 738.9 | 2.6 / 5.9 / 29.2 |
+| defocused | 95 | 344.2 / 543.1 / 3739.3 | 3.5 / 4.3 / 46.3 |
+
+An earlier run gave the same ordering on laser-on (sharp median 378, moving 452, defocused 1573).
+
+- **Laser-on is backwards.** Moving and close faces score higher than a still one. The score follows the projector dots, which grow brighter and larger as the face comes closer, not the face's focus. Resizing the crop does not remove them.
+- **Laser-off has no signal.** All three tags sit at a median of 4–6. Without the projector the image is dark under the 3 ms exposure cap, so there are hardly any edges to measure.
+- **Likely little blur to catch.** With `auto_exposure_limit_us: 3000`, a head moving 0.5 m/s travels about 1.5 mm during one exposure, about a pixel at these distances. The IR cameras are fixed-focus.
+
+Decision: `blur_min` is removed from `configs/default.yaml`, so the check is off. The code stays (`sharpness()` in `capture/quality_gate.py`, the gate runs it only when `blur_min` is set) along with the tuning tool. Revisit with a contrast-normalised score on laser-off, or drop the requirement if motion blur never shows up in the recorded takes.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.
