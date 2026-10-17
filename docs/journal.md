@@ -297,6 +297,18 @@ An earlier run gave the same ordering on laser-on (sharp median 378, moving 452,
 
 Decision: `blur_min` is removed from `configs/default.yaml`, so the check is off. The code stays (`sharpness()` in `capture/quality_gate.py`, the gate runs it only when `blur_min` is set) along with the tuning tool. Revisit with a contrast-normalised score on laser-off, or drop the requirement if motion blur never shows up in the recorded takes.
 
+## 2026-10-18 — R1: evaluation harness
+
+Built before any model, so models are chosen by measurement on this D435.
+
+- **`face/embed.py`:** one `Embedder` interface, `embed(ir_crop, depth_crop) -> Embedding(vector, quality)` on the 112×112 crop from `align_crop`. `RawPixelEmbedder` (downscaled pixels) is the floor any real model must beat; it is not a recogniser.
+- **`eval/metrics.py`:** FMR / FNMR, threshold at a target FMR, ROC, EER, FPIR / FNIR, rule of three.
+- **`eval/far_frr.py`:** `uv run python -m eval.far_frr --embedder raw_pixels`. Each genuine take is one sample (embeddings of its frames averaged), because frames of one take are not independent. Spoof takes are skipped. Protocols: `cross-session` (enrol on each person's first session, probe with the rest; the real test) and `cross-take` (alternate takes; optimistic, for dry runs). Each probe is also searched with its own person removed, which gives the non-mated 1:N searches. The 95% FMR bound counts distinct person pairs, not scores. Targets finer than 1/n are marked unresolvable. Output: `data/eval/<embedder>_<protocol>_<emitter>/` with `report.json`, `roc.csv`, `scores.csv`, `takes.csv`.
+- **Frames:** laser-off by default (`--emitter off`), since it has no dot pattern. The blur runs showed laser-off is dark under the 3 ms cap, so check `takes.csv` for how many frames had a face; if few, try `--emitter on`.
+- **Tests:** `tests/test_eval.py`, 10 tests. 70 pass.
+
+Not run yet: there are no recordings in `data/raw/`. Next: record 2+ people (2 sessions each for `cross-session`), run the raw-pixel baseline, then add the first real model (R2).
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

@@ -41,7 +41,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] Headless smoke test on the real D435 (emitter alternates every frame)
 - [x] **Check:** center-box distance matches a tape measure. Checked 2026-10-05: correct from 10 cm to about 100 cm on black and green walls. Not checked past 100 cm. A white wall reads `n/a` (IR image clips, so there is no depth).
 - [ ] Decide hole-filling mode (1 vs 2) from real face data
-- [ ] `capture/recorder.py`: save synchronised IR + depth with labels to `data/raw/` (also needed for step 7)
+- [x] `capture/recorder.py`: save synchronised IR + depth (+ RGB) with labels to `data/raw/` (also needed for step 7)
 - [x] `.gitignore` entry for `data/`; first git commit
 
 ## Step 2: Pi build
@@ -128,7 +128,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Step 9: Evaluation + threshold tuning
 
-- [ ] `eval/far_frr.py`: ROC, FAR / FRR for identity
+- [x] `eval/far_frr.py`: ROC, FMR / FNMR, EER, FPIR / FNIR, rule-of-three bound, on recorded takes for any `Embedder` (2026-10-18). Not yet run on real recordings
 - [ ] `eval/spoof_eval.py`: APCER, BPCER, ACER per attack type
 - [ ] Ablation: geometry-only vs model-only vs fused
 - [ ] Lit vs dark room; glasses and makeup cases
