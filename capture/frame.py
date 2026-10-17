@@ -24,10 +24,14 @@ class Intrinsics:
 
 @dataclass(frozen=True)
 class Frame:
-    """One synchronised left-IR + depth sample.
+    """One synchronised left-IR + depth sample, with RGB when it is enabled.
 
     ir:    uint8 (H, W)
     depth: float32 (H, W) metres, 0 means invalid
+    rgb:   uint8 (H, W, 3) BGR, mapped into the IR viewport through depth.
+           Black where depth was missing. None when the colour stream is off.
+    rgb_timestamp: the colour frame's own time; the colour camera is a
+           separate rolling-shutter sensor, so it is not exactly `timestamp`.
     """
 
     ir: np.ndarray
@@ -35,6 +39,8 @@ class Frame:
     intrinsics: Intrinsics
     timestamp: float
     emitter_state: EmitterState
+    rgb: np.ndarray | None = None
+    rgb_timestamp: float | None = None
 
 
 def center_roi_median_m(depth: np.ndarray, frac: float) -> float:

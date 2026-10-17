@@ -71,6 +71,7 @@ class RealSenseStream:
         self._pipeline: rs.pipeline | None = None
         self._align = rs.align(rs.stream.infrared)
         self._filters = DepthFilterChain(cfg["filters"])
+        self._rgb_enabled = bool(cfg["camera"].get("rgb", False))
         self.depth_scale: float = 0.0
         self.intrinsics: Intrinsics | None = None
 
@@ -81,6 +82,8 @@ class RealSenseStream:
         config = rs.config()
         config.enable_stream(rs.stream.depth, w, h, rs.format.z16, fps)
         config.enable_stream(rs.stream.infrared, 1, w, h, rs.format.y8, fps)
+        if self._rgb_enabled:
+            config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, fps)
 
         pipeline = rs.pipeline()
         resolved = config.resolve(rs.pipeline_wrapper(pipeline))
@@ -150,12 +153,27 @@ class RealSenseStream:
         if depth.shape != ir.shape:
             raise RuntimeError(f"depth {depth.shape} and IR {ir.shape} shapes differ")
 
+        rgb = None
+        rgb_timestamp = None
+        if self._rgb_enabled:
+            # align maps colour into the IR viewport using this frame's depth,
+            # so pixels with no depth come out black.
+            color_frame = aligned.get_color_frame()
+            if not color_frame:
+                raise RuntimeError("frameset missing colour after align")
+            rgb = np.asanyarray(color_frame.get_data()).copy()
+            rgb_timestamp = float(color_frame.get_timestamp()) / 1000.0
+            if rgb.shape[:2] != ir.shape:
+                raise RuntimeError(f"RGB {rgb.shape} and IR {ir.shape} shapes differ")
+
         return Frame(
             ir=ir,
             depth=depth,
             intrinsics=self.intrinsics,
             timestamp=float(ir_frame.get_timestamp()) / 1000.0,
             emitter_state=emitter,
+            rgb=rgb,
+            rgb_timestamp=rgb_timestamp,
         )
 
 

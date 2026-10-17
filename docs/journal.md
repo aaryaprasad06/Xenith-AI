@@ -182,6 +182,87 @@ Use the shape of the heat map (centre against the rim), not a stored cutoff such
 
 Phase 2 work, when it starts: bolt the Lepton next to this D435 (serial `236422073835`), calibrate a homography once, copy the face box from the IR detector, and score centre versus rim. Record cold masks, masks worn 30 s, masks worn several minutes, glasses, and people who just came in from the cold. Report the silicone miss rate on its own. Do not train that score on WMCA weights. Those frames are from an SR300.
 
+## 2026-10-17 — Identity research: what to build, and what accuracy can be claimed
+
+The goal for identity is a 1:N gallery of 100+ people, at accuracy as close as possible to Apple Face ID and the RealSense ID F455. Identity should use IR, depth and RGB, so one modality can cover for another. The model is not chosen yet. Choosing it is a separate research step, measured on our own D435 data. The full plan is phases R0–R5 in `~/.claude/plans/now-lets-brainstorm-the-glimmering-raccoon.md`.
+
+**Decisions taken:**
+- A non-commercial model is acceptable (InsightFace buffalo_l / antelopev2, EdgeFace). Models are picked on accuracy, not license.
+- About 50 volunteers are available. Adding more is possible but is a large effort, so the plan avoids it. Extra impostor and training data comes from public datasets instead.
+
+**What the reference products claim:**
+- **Face ID:** FAR below 1 in 1,000,000 for **one** enrolled face. Higher for twins, look-alike siblings and children under 13. After 5 failed matches the passcode is required. It also checks that the eyes are open and looking at the device, and the capture sequence is randomised. New captures are added to the template only if their quality is good enough, and they expire after a limited number of unlocks. The networks were trained on over a billion images, including IR and depth. ([Face ID security guide](https://www.apple.com/business-docs/FaceID_Security_Guide.pdf), [Apple support](https://support.apple.com/en-us/102381))
+- **F455:** FAR 1:1M, TAR 99.76%, spoof accept rate below 0.1%, 500 users, 30–100 cm, 0–50k lux, under 0.8 s. ([datasheet, Dec 2025](https://realsenseai.com/wp-content/uploads/2025/12/RealSense_ID_F45X-Datasheet-Dec-2025.pdf))
+
+**What the F455 actually uses:**
+- **Cameras:** two Full-HD colour cameras that also see 850 nm IR. Authentication reads their RAW Bayer pixels. They are not mono IR imagers like the D435's.
+- **Illumination:** an 850 nm IR LED flood and an 850 nm IR dot projector.
+- **No calibrated depth:** the two cameras are "semi-mechanically aligned" and have no extrinsic calibration, so the device cannot compute calibrated depth. It uses landmark disparity between the two images instead.
+- **Pipeline:** pre-processing, anti-spoofing, embedding, matching, all on an on-chip neural accelerator.
+- **Anti-spoofing:** three small MobileNetV2-style models (about 1M parameters each): left image, right image and disparity. If any one says spoof, the attempt is rejected.
+- **Anti-spoof training data alone:** about 10.7k people and 1.7M live images, plus about 2M spoof images (prints, screens, cut and rolled paper, latex masks), from 20 devices, up to 2 m and ±40° head pose, indoor and outdoor.
+- **Unpublished:** the recognition model.
+- **Datasheet inconsistency:** it is unclear whether the left or the right camera provides RGB.
+- Source for most of the above: the Intel RealSense team's paper, [arXiv 2410.24031](https://arxiv.org/html/2410.24031).
+
+**What can be measured here:**
+- With 0 false accepts in n independent impostor trials, the 95% upper bound on FAR is 3/n (the rule of three).
+- P people give P(P−1)/2 impostor pairs. **50 volunteers give 1,225 pairs, so the best claim from our own data is FAR ≤ about 2.4e-3.** 100 people would support about 6e-4. Proving 1e-6 would need about 2,450 people.
+- In 1:N search, the false-positive identification rate is roughly N × FMR. With 100 users, a 1e-3-per-attempt target needs a 1:1 FMR of about 1e-5.
+- So we will report "FAR ≤ 3/n at 95%" and **not** claim parity with 1:1M. The PRD's FAR target (<0.1%) is the realistic one.
+- Public datasets used as extra strangers make that bound tighter. They come from other sensors, so they are reported separately.
+
+**Models:**
+- Large ArcFace-family backbones (IR50/IR100) trained on RGB transfer to NIR almost unchanged: TAR@FAR=1e-4 of 99.5–99.9% on CASIA NIR-VIS 2.0, Oulu-CASIA and BUAA. Small models degrade (MobileFaceNet 84.6%).
+- **Training IR from scratch fails** (12–50%). Naive fine-tuning on NIR hurt (99.89 → 94.3). Only regularised fine-tuning with frozen class centres helped. ([arXiv 2312.00627](https://arxiv.org/pdf/2312.00627))
+- **Depth for identity:** Led3D-style networks reach about 99.6% on neutral faces but about 65–78% across sessions, poses and occlusion on Lock3DFace. A depth branch can be trained from scratch (synthetic BFM faces, then Lock3DFace), but only as a supporting score. If it adds nothing, depth stays liveness-only, which is what the F455 appears to do.
+
+**Spoofing (DepthFake, IEEE S&P 2023):**
+- **The attack:** estimate the victim's depth from one photo. Then shine a doctored dot pattern from an IR projector onto a printed copy of the photo, which is also adversarially altered for the RGB check.
+- **Results:** depth-only liveness was fooled 79.4% of the time, and RGB+depth 59.4%, on an Orbbec Astra Pro (structured light) running Tencent, Baidu and 3DiVi. The attack held for 6+ frames in a row.
+- **Once liveness was fooled, matching was fooled 100%,** because matching used RGB only.
+- **The D435 is active stereo,** so its depth comes from the real surface and the paper's mechanism does not carry over directly. However, DoubleStar ([USENIX Security 2022](https://www.usenix.org/conference/usenixsecurity22/presentation/zhou-ce)) faked depth on RealSense stereo cameras. Red Bleed ([USENIX Security 2025](https://www.usenix.org/system/files/usenixsecurity25-hu-bowen.pdf)) made an LCD visible in NIR.
+- **Lesson:** identity must not rest on RGB alone.
+
+**Decision rule chosen:**
+- **Liveness is AND, with no fallback:** depth geometry, the emitter on/off check, and later an IR/depth spoof classifier.
+- **Identity is scored per modality and then fused,** with quality weights. IR is mandatory.
+- **A modality may drop out only by being absent or low quality.** If it is present, good quality and disagrees, the result is deny. Fewer modalities means a **stricter** threshold, never a looser one.
+- **"If one fails, use another" as an OR fallback is ruled out:** it hands the attacker the weakest modality.
+- **1:N acceptance also needs** a margin over the second-best person, k-of-n frame agreement, and a lockout after `door.max_failures`.
+
+**Public datasets compared with the F455's own data:**
+- **Scale and sensor:** the F455 data is private, large, and captured on the exact device it is deployed on. The public sets are 52–1,000 people captured on other sensors. None used a D435.
+- **Depth method:** Kinect v1 and SR300 use structured light, and Kinect v2 uses time-of-flight. The D435 is active stereo, so its depth noise and holes differ.
+- **Purpose:** WMCA and CASIA-SURF were built for anti-spoofing, not for identity across sessions.
+- **Consequence:** thresholds must come from our own D435 volunteers. Public sets serve only for pretraining (mainly depth) and as extra impostors.
+
+| Dataset | Contents | Use here | Access |
+| --- | --- | --- | --- |
+| [WMCA](https://www.idiap.ch/en/scientific-research/data/wmca) | 72 people, 1,941 videos, colour/depth/IR/thermal (SR300 among the sensors), prints, replays, masks | Spoof testing, closest sensor | Preprocessed version free on [Zenodo](https://zenodo.org/record/4580313). Full 4.7 TB version for a fee |
+| [Lock3DFace](http://irip.buaa.edu.cn/lock3dface/index.html) | About 500 people, Kinect v2 colour and depth, expression/pose/occlusion/time-lapse | Training the depth identity branch | Request |
+| [CASIA-SURF](https://openaccess.thecvf.com/content_CVPR_2019/html/Zhang_A_Dataset_and_Benchmark_for_Large-Scale_Multi-Modal_Face_Anti-Spoofing_CVPR_2019_paper.html) | 1,000 people, 21k videos, RGB/depth/IR from an SR300 | Extra impostors, spoof training | Request. Links not confirmed live ([ChaLearn page](https://chalearnlap.cvc.uab.cat/dataset/33/description/)) |
+| [CASIA NIR-VIS 2.0](https://www.idiap.ch/software/bob/docs/bob/bob.db.cbsr_nir_vis_2/stable) | 725 people, NIR and visible, 4 sessions | Extra IR impostors | Release agreement with CASIA |
+| [EURECOM KinectFaceDB](https://rgb-d.eurecom.fr/) | 52 people, colour/depth/3D, 2 sessions | Small RGB-D check | Not checked |
+
+These datasets usually require a license agreement signed by a supervisor, not a student. Without them the project still works, with a weaker FAR claim (about 2.4e-3), and depth may stay liveness-only.
+
+**Volunteer protocol (kept lean for 50 people):**
+- 2 sessions on different days.
+- 5 poses per session (center, left, right, up, down), about 30 frames each, lit.
+- One dark take per session, to test IR only.
+- A glasses take only for people who wear them.
+- About 5 minutes per person per session.
+- Spoof takes (print, phone screen) from 10–15 of them.
+
+**Code that landed (R0), not yet run on the camera:**
+- **`capture/realsense_stream.py`:** the colour stream is enabled at 848×480 when `camera.rgb: true` (now the default). It is aligned into the IR viewport through depth and exposed as `Frame.rgb` (BGR), with its own `rgb_timestamp`, because the colour sensor is a separate rolling-shutter camera. Pixels with no depth come out black.
+- **`capture/recorder.py`:** records labelled takes to `data/raw/<person>/<session>/<pose>_<lighting>[_glasses][_<attack>]/`: a `meta.json` plus one `.npz` per frame. Laser-on and laser-off frames are both kept, in order, so a liveness window can be replayed. It refuses to run without `--consent`. Run it with `uv run python -m capture.recorder --person p001 --session s1 --pose center --lighting lit --consent`. Space records and q quits.
+- **Tests:** `tests/test_recorder.py` covers the save/load round trip with and without RGB, overwrite protection, attack takes and label validation. 58 tests pass.
+- **To check on the D435:** the colour stream starts at 848×480, and the API and `liveness.watch` still keep frame rate with colour alignment on every frame. If they do not, turn `rgb` off for the API.
+
+Next: R1, the evaluation harness (`eval/far_frr.py`) and one `Embedder` interface (`face/embed.py`), so candidate models can be compared on recorded takes.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.
