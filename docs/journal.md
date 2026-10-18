@@ -309,6 +309,73 @@ Built before any model, so models are chosen by measurement on this D435.
 
 Not run yet: there are no recordings in `data/raw/`. Next: record 2+ people (2 sessions each for `cross-session`), run the raw-pixel baseline, then add the first real model (R2).
 
+## 2026-10-18 — Recording from the console
+
+Takes can now be recorded from the web console, so one person can record alone without the OpenCV window.
+
+- **`POST /v1/recordings`** (admin token) takes the same labels as `capture.recorder` and refuses without `consent: true`. `CameraHub.capture` collects the next N frames from the API's one pipeline, laser-on and laser-off in order, so the recorder and the API never fight over the D435. The files are written by the same `save_take`, so `eval.far_frr` reads them unchanged. The reply counts frames with exactly one face, per emitter state, the same way the harness does, so an unusable take shows up at once.
+- **`GET /v1/recordings`** lists takes for a person and session. **`DELETE /v1/recordings/{person}/{session}/{take}`** removes a bad take, and the empty folders above it.
+- **Record page (`/record`):** live IR view, labels, a countdown (3 s by default, so you can sit back or hold up a print), the lean protocol as a checklist (five lit poses, one dark, glasses if ticked, print and screen spoofs), and Space to record.
+- **Tests:** `tests/test_recordings_api.py`, 10 tests. 80 pass.
+
+Not run on the camera yet. Next: record p001 s1 from the console and check the face counts.
+
+## 2026-10-18 — Guided recording, like phone face enrolment
+
+The Record page now leads the person through the takes instead of asking them to pick labels. A ring of ticks sits round a mirrored live view and fills as the head turns, with prompts such as "Move closer", "Only one face, please" and "Move your head slowly to complete the circle".
+
+- **`face/pose.py`:** a rough head turn from the five YuNet landmarks. The nose offset from the centre of the eyes and mouth, in the eye-line frame (roll does not count) and divided by the eye distance (camera distance does not count). It is not degrees: it is always taken relative to the person's own straight-ahead pose. `left` means the person's own left.
+- **`enroll/guide.py`:** the steps. `circle` first holds still for `pairs_per_pose` laser-on/off pairs to learn the straight-ahead pose (moving resets it), then fills `center` plus eight directions (`right`, `up_right` … `down_right`) until each has `pairs_per_pose` pairs past `reach_min`. `dark`, `print` and `screen` hold one pose for 15 pairs. Faces must pass the quality gate, except on spoof steps, where only size is checked because a screen often has no depth. Each direction is saved as an ordinary take, so `eval.far_frr` reads it unchanged.
+- **Pairs:** frames are kept as a laser-on frame and the laser-off frame after it (`Pairer`), so a take still has both kinds side by side. The frames of one direction are not one continuous second; they are collected while the head moves.
+- **`api/services/guided.py`:** runs the guide in its own thread with its own detector. The camera thread only drops frames into a short queue, so a slow detector skips frames and the preview does not stall. `POST/GET/DELETE /v1/recordings/guided` start, poll and cancel. It refuses to start if any take it would write exists, unless overwrite is set. A run gives up after `guide.timeout_s`.
+- **`configs/default.yaml`:** new `guide` section (`center_max` 0.06, `reach_min` 0.15, `pairs_per_pose` 10 (later 6), `ticks` 48, `timeout_s` 180). Starting values, not tuned.
+- The single-take form is still there under "Manual take".
+- **Tests:** `tests/test_guide.py` (12) and `tests/test_guided_api.py` (6). 99 pass.
+
+Not run on the camera yet. To check: whether `reach_min` is reachable in every direction without losing the face, especially up and the diagonals, and how many pairs per second the worker keeps up with.
+
+## 2026-10-18 — Guided circle did not complete
+
+First try on this D435: the ring looked almost full, but the prompt stayed on "Move your head slowly to complete the circle" and the step never finished.
+
+- **Ticks lied.** A tick lit on the first frame pair seen at that angle, but a direction is only done after `pairs_per_pose` pairs. Several directions were still short while the ring looked full. Now each direction owns the ticks in its 45° sector, and they light in proportion to the pairs collected.
+- **Pairs were broken by dropped frames.** Frames went one by one into a 6-slot queue that dropped new frames when full. Once the worker fell behind, the queue held every few frames, so a laser-on frame rarely had its laser-off partner next to it, and lone frames were thrown away. Pairing now happens in the camera callback, and the queue holds whole pairs, dropping the oldest pair.
+- **Prompts point the way.** "Good. Hold it there a moment." while a direction is filling, then "Now turn up and to your left." for the nearest direction still short.
+- `pairs_per_pose` lowered from 10 to 6 (12 frames per direction take), so each direction needs under a second of holding at 15 pairs/s.
+- The page shows the pairs judged per second. About 15 means the worker keeps up with the camera.
+
+## 2026-10-18 — Head pose from depth instead of the 2D landmarks
+
+Second try on this D435: the circle filled faster, but up and down still stuck, and "Move your head slowly" kept showing while the head was already turned.
+
+- **Cause.** The first `face/pose.py` read the turn from the image alone: the nose tip's offset from the middle of the eyes and mouth. Sideways the nose moves a lot, so left/right worked. For a nod it hardly moves in the image, so a plain up or down rarely reached the threshold, while diagonals did because their sideways part added to it.
+- **Now.** The eyes and mouth corners are deprojected with the laser-on depth (7×7 median per point), and the face direction is the normal of the plane they span. That gives yaw and pitch in degrees, and pitch is measured as directly as yaw. If depth is missing at any point the pair is skipped with "Keep your whole face in view of the camera."
+- **Thresholds in degrees,** as an ellipse: `reach_yaw_deg` 18 and `reach_pitch_deg` 12, because necks nod less than they turn. `center_max_deg` 6 for holding still. Starting values.
+- **Prompt.** "A little further." when the turn is at least halfway to the ring but short of it.
+- **Pointer.** A dot inside the ring shows where the system thinks the head points; it has to reach the ticks to count. If it moves the wrong way, the sign is wrong.
+- Tests build flat tilted depth maps and check the degrees, roll, missing depth, and that a plain nod fills up and down. 103 pass.
+
+## 2026-10-18 — First guided session recorded (p001 s1)
+
+Alan recorded himself with the guided Record page on this D435 (serial `236422073835`). With the depth-based head pose the pointer dot moves the right way and the circle completes, in about 12 s. Takes in `data/raw/p001/s1/`: `center_lit` and the eight directions (12 frames each), `center_dark` and `center_lit_screen` (30 frames each). No printed photo was at hand, so `center_lit_print` is missing.
+
+Frames with exactly one face of at least 80 px (YuNet on the stored IR):
+
+| Take | Laser-on | Laser-off |
+| --- | --- | --- |
+| center_lit | 6/6 | 6/6 |
+| up, up_left | 6/6 | 6/6 |
+| up_right | 4/6 | 6/6 |
+| left / right | 3/6, 2/6 | 6/6 |
+| down, down_left, down_right | 0/6 | 6/6 |
+| center_dark | 1/15 | 15/15 |
+| center_lit_screen | 1/15 | 14/15 |
+
+- **Laser-off is the frame to use for identity.** The face is found in every laser-off frame and often missed on laser-on, where the dot pattern breaks it up, worst when looking down. This answers the open question from R1: `eval.far_frr` should stay on `--emitter off`. The guide still worked because `faces_for_depth_frame` falls back to the laser-off image.
+- The dark take works through laser-off IR as well.
+
+Next: session 2 on another day, a printed photo when one is available, and a second person so `eval.far_frr` can run.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

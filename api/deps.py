@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
 
 from api.core.config import Settings
 from api.services.camera import CameraHub
+from api.services.guided import GuidedRecorder
 from api.services.users import UserStore
 
 
@@ -13,8 +15,16 @@ def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
+def get_raw_root(request: Request) -> Path:
+    return request.app.state.settings.raw_root
+
+
 def get_camera(request: Request) -> CameraHub:
     return request.app.state.camera
+
+
+def get_guided(request: Request) -> GuidedRecorder:
+    return request.app.state.guided
 
 
 def get_users(request: Request) -> UserStore:

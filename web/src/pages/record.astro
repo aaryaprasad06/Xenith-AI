@@ -1,0 +1,436 @@
+---
+import Button from "../components/Button.astro";
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Record — Face-ID" current="record">
+  <div class="recorder">
+    <section class="stage">
+      <div class="ring" id="ring">
+        <img class="face-view" src="/v1/preview/stream" alt="Live infrared from the depth camera, mirrored" />
+        <svg viewBox="-100 -100 200 200" aria-hidden="true">
+          <g id="ticks"></g>
+          <circle id="pointer" class="pointer" r="5" cx="0" cy="0"></circle>
+        </svg>
+      </div>
+      <p id="prompt" class="prompt" role="status">Choose a step and press Start.</p>
+      <p id="rate" class="rate"></p>
+      <div class="actions">
+        <Button id="start" type="button">Start</Button>
+        <Button id="cancel" variant="quiet" type="button">Cancel</Button>
+      </div>
+      <ol id="steps" class="steps"></ol>
+    </section>
+
+    <div class="panel">
+      <div class="token">
+        <input id="token" type="password" placeholder="Admin token" autocomplete="current-password" />
+        <Button id="save-token" variant="quiet" type="button">Save token</Button>
+      </div>
+      <form id="labels" class="fields">
+        <label>Person <input id="person" type="text" required maxlength="64" placeholder="p001" autocomplete="off" /></label>
+        <label>Session <input id="session" type="text" required maxlength="64" placeholder="s1" autocomplete="off" /></label>
+        <label class="check"><input id="glasses" type="checkbox" /> Wearing glasses</label>
+        <label class="check"><input id="overwrite" type="checkbox" /> Replace takes already recorded</label>
+        <label class="check"><input id="consent" type="checkbox" /> This person's consent is on file</label>
+      </form>
+      <p id="message" class="result" role="status"></p>
+
+      <h2>Recorded in this session</h2>
+      <ul id="takes" class="people"></ul>
+
+      <details class="manual">
+        <summary>Manual take</summary>
+        <p class="note">One take with a pose you pick. The guided steps cover the usual set.</p>
+        <div class="fields">
+          <label>Pose <select id="pose"></select></label>
+          <label>Lighting <select id="lighting"></select></label>
+          <label>Attack <select id="attack"></select></label>
+          <label>Frames <input id="frames" type="number" min="2" max="300" value="30" /></label>
+        </div>
+        <div class="actions"><Button id="record" variant="quiet" type="button">Record in 3 s</Button></div>
+      </details>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { authHeaders, readToken, saveToken } from "../lib/admin";
+  import { buttonClass } from "../lib/button";
+
+  const $ = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
+  const tokenInput = $<HTMLInputElement>("token");
+  const person = $<HTMLInputElement>("person");
+  const session = $<HTMLInputElement>("session");
+  const glasses = $<HTMLInputElement>("glasses");
+  const overwrite = $<HTMLInputElement>("overwrite");
+  const consent = $<HTMLInputElement>("consent");
+  const message = $("message");
+  const prompt = $("prompt");
+  const ticksGroup = $("ticks");
+  const stepsList = $("steps");
+  const takesList = $("takes");
+  const startButton = $<HTMLButtonElement>("start");
+  const cancelButton = $<HTMLButtonElement>("cancel");
+  const ring = $("ring");
+  const rate = $("rate");
+  const pointer = document.querySelector<SVGCircleElement>("#pointer")!;
+  const pose = $<HTMLSelectElement>("pose");
+  const lighting = $<HTMLSelectElement>("lighting");
+  const attack = $<HTMLSelectElement>("attack");
+  const frames = $<HTMLInputElement>("frames");
+  const recordButton = $<HTMLButtonElement>("record");
+
+  type Step = "circle" | "dark" | "print" | "screen";
+
+  interface Take {
+    take: string;
+    frames: number;
+    laser_on: number;
+    laser_off: number;
+  }
+
+  interface GuidedState {
+    status: "idle" | "running" | "saving" | "done" | "failed" | "cancelled";
+    step: Step | null;
+    phase: string | null;
+    prompt: string;
+    progress: number;
+    ticks: boolean[];
+    counts: Record<string, number>;
+    saved: string[];
+    pairs_per_s: number;
+    pointer: [number, number] | null;
+  }
+
+  const STEPS: Array<{ step: Step; title: string; how: string }> = [
+    { step: "circle", title: "Face circle", how: "Look straight at the camera, then roll your head slowly in a circle." },
+    { step: "dark", title: "In the dark", how: "Turn the room light off, then look straight at the camera." },
+    { step: "print", title: "Printed photo", how: "Hold a printed photo of the face up to the camera. This is an attack sample." },
+    { step: "screen", title: "Phone screen", how: "Show a photo of the face on a phone. This is an attack sample." },
+  ];
+  const TICKS = 48;
+
+  let selected: Step = "circle";
+  let recorded: Take[] = [];
+  let polling: number | undefined;
+
+  tokenInput.value = readToken();
+  try {
+    person.value = localStorage.getItem("face-id-record-person") ?? "";
+    session.value = localStorage.getItem("face-id-record-session") ?? "";
+  } catch {
+    // Storage can be blocked; the fields just start empty.
+  }
+
+  function show(text: string, tone: "good" | "bad" | "" = ""): void {
+    const trimmed = text.trim();
+    message.textContent = trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : trimmed;
+    message.className = tone ? `result ${tone}` : "result";
+  }
+
+  // Ticks are counter-clockwise from screen right, matching the API's `ticks`.
+  const tickLines: SVGLineElement[] = [];
+  for (let i = 0; i < TICKS; i += 1) {
+    const angle = ((i + 0.5) * 2 * Math.PI) / TICKS;
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", String(84 * Math.cos(angle)));
+    line.setAttribute("y1", String(-84 * Math.sin(angle)));
+    line.setAttribute("x2", String(96 * Math.cos(angle)));
+    line.setAttribute("y2", String(-96 * Math.sin(angle)));
+    ticksGroup.append(line);
+    tickLines.push(line);
+  }
+
+  function paintTicks(lit: boolean[]): void {
+    tickLines.forEach((line, i) => line.classList.toggle("on", Boolean(lit[i])));
+  }
+
+  // Outside the circle phase, fill clockwise from the top as progress grows.
+  function progressTicks(progress: number): boolean[] {
+    return tickLines.map((_, i) => {
+      const angle = ((i + 0.5) * 2 * Math.PI) / TICKS;
+      const clockwiseFromTop = (((Math.PI / 2 - angle) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      return clockwiseFromTop / (2 * Math.PI) < progress;
+    });
+  }
+
+  function stepTakes(step: Step): string[] {
+    const g = glasses.checked ? "_glasses" : "";
+    if (step === "circle") {
+      const poses = ["center", "right", "up_right", "up", "up_left", "left", "down_left", "down", "down_right"];
+      return poses.map((p) => `${p}_lit${g}`);
+    }
+    if (step === "dark") return [`center_dark${g}`];
+    return [`center_lit_${step}`];
+  }
+
+  function renderSteps(): void {
+    const done = new Set(recorded.map((take) => take.take));
+    stepsList.replaceChildren(
+      ...STEPS.map(({ step, title, how }) => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        const finished = stepTakes(step).every((name) => done.has(name));
+        button.className = `step${step === selected ? " selected" : ""}${finished ? " done" : ""}`;
+        const head = document.createElement("span");
+        head.className = "step-title";
+        head.textContent = `${finished ? "✓" : "○"} ${title}`;
+        const body = document.createElement("span");
+        body.className = "step-how";
+        body.textContent = how;
+        button.append(head, body);
+        button.addEventListener("click", () => {
+          selected = step;
+          button.blur();
+          renderSteps();
+          paintTicks([]);
+          prompt.textContent = `${title}. ${how} Press Start.`;
+        });
+        item.append(button);
+        return item;
+      }),
+    );
+  }
+
+  function renderTakes(): void {
+    takesList.replaceChildren(
+      ...recorded.map((take) => {
+        const item = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "person";
+        name.textContent = take.take;
+        const detail = document.createElement("span");
+        detail.className = "when";
+        detail.textContent = `${take.frames} frames, ${take.laser_on} laser-on, ${take.laser_off} laser-off`;
+        name.append(detail);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = buttonClass("danger");
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          const path = [person.value.trim(), session.value.trim(), take.take].map(encodeURIComponent).join("/");
+          const response = await fetch(`/v1/recordings/${path}`, { method: "DELETE", headers: authHeaders() });
+          const body = await response.json();
+          show(response.ok ? `Deleted ${take.take}.` : (body.detail ?? "Delete failed"), response.ok ? "" : "bad");
+          await refresh();
+        });
+        item.append(name, remove);
+        return item;
+      }),
+    );
+  }
+
+  async function refresh(): Promise<void> {
+    const p = person.value.trim();
+    const s = session.value.trim();
+    recorded = [];
+    if (p && s) {
+      const query = new URLSearchParams({ person: p, session: s });
+      const response = await fetch(`/v1/recordings?${query}`, { headers: authHeaders() });
+      const body = await response.json();
+      if (response.ok) recorded = body.takes;
+      else show(body.detail ?? "Could not list takes", "bad");
+    }
+    renderSteps();
+    renderTakes();
+  }
+
+  function ready(): boolean {
+    if (!person.value.trim() || !session.value.trim()) {
+      show("Set the person and the session first.", "bad");
+      return false;
+    }
+    if (!consent.checked) {
+      show("Tick the consent box. Record only people whose consent is on file.", "bad");
+      return false;
+    }
+    return true;
+  }
+
+  function setRunning(running: boolean): void {
+    startButton.disabled = running;
+    recordButton.disabled = running;
+    ring.classList.toggle("live", running);
+  }
+
+  function nextStep(): void {
+    const done = new Set(recorded.map((take) => take.take));
+    const next = STEPS.find(({ step }) => !stepTakes(step).every((name) => done.has(name)));
+    if (next) {
+      selected = next.step;
+      renderSteps();
+    }
+  }
+
+  function apply(state: GuidedState): void {
+    if (state.status === "idle") return;
+    prompt.textContent = state.prompt;
+    paintTicks(state.phase === "circle" || state.status === "done" ? state.ticks : progressTicks(state.progress));
+    // The dot shows where the head points; reaching the ticks (radius 84) counts.
+    const showPointer = state.status === "running" && state.phase === "circle" && state.pointer !== null;
+    pointer.classList.toggle("shown", showPointer);
+    if (showPointer && state.pointer) {
+      const [px, py] = state.pointer;
+      const length = Math.hypot(px, py);
+      const clamp = length > 1.15 ? 1.15 / length : 1;
+      pointer.setAttribute("cx", String(px * clamp * 84));
+      pointer.setAttribute("cy", String(-py * clamp * 84));
+    }
+    rate.textContent =
+      state.status === "running" ? `${state.pairs_per_s.toFixed(1)} frame pairs/s checked` : "";
+    prompt.className = state.status === "failed" ? "prompt bad" : state.status === "done" ? "prompt good" : "prompt";
+  }
+
+  async function poll(): Promise<void> {
+    const response = await fetch("/v1/recordings/guided", { headers: authHeaders() });
+    if (!response.ok) return;
+    const state: GuidedState = await response.json();
+    apply(state);
+    if (state.status === "running" || state.status === "saving") {
+      polling = window.setTimeout(() => void poll(), 150);
+      return;
+    }
+    polling = undefined;
+    setRunning(false);
+    if (state.status === "done") {
+      show(`Saved ${state.saved.join(", ")}.`, "good");
+      overwrite.checked = false;
+      await refresh();
+      nextStep();
+    }
+  }
+
+  async function start(): Promise<void> {
+    if (startButton.disabled || !ready()) return;
+    setRunning(true);
+    show("");
+    const response = await fetch("/v1/recordings/guided", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        person: person.value.trim(),
+        session: session.value.trim(),
+        step: selected,
+        glasses: glasses.checked,
+        consent: consent.checked,
+        overwrite: overwrite.checked,
+      }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setRunning(false);
+      const detail = typeof body.detail === "string" ? body.detail : "Could not start";
+      show(response.status === 409 ? `${detail}. Tick "Replace" to record them again.` : detail, "bad");
+      return;
+    }
+    apply(body);
+    if (polling === undefined) void poll();
+  }
+
+  async function cancel(): Promise<void> {
+    await fetch("/v1/recordings/guided", { method: "DELETE", headers: authHeaders() });
+  }
+
+  async function recordManual(): Promise<void> {
+    if (recordButton.disabled || !ready()) return;
+    setRunning(true);
+    try {
+      for (let left = 3; left > 0; left -= 1) {
+        prompt.textContent = `Manual take in ${left}.`;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      prompt.textContent = "Recording. Hold still.";
+      const response = await fetch("/v1/recordings", {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          person: person.value.trim(),
+          session: session.value.trim(),
+          pose: pose.value,
+          lighting: lighting.value,
+          attack: attack.value,
+          glasses: glasses.checked,
+          frames: Number(frames.value),
+          consent: consent.checked,
+          overwrite: overwrite.checked,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        prompt.textContent = typeof body.detail === "string" ? body.detail : "Recording failed";
+        return;
+      }
+      const { take, faces_on, faces_off } = body;
+      prompt.textContent =
+        `Saved ${take.take}. One face in ${faces_off}/${take.laser_off} laser-off ` +
+        `and ${faces_on}/${take.laser_on} laser-on frames.`;
+      await refresh();
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function fill(select: HTMLSelectElement, values: string[], chosen: string): void {
+    select.replaceChildren(
+      ...values.map((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        option.selected = value === chosen;
+        return option;
+      }),
+    );
+  }
+
+  async function loadOptions(): Promise<void> {
+    const response = await fetch("/v1/recordings/options", { headers: authHeaders() });
+    const body = await response.json();
+    if (!response.ok) {
+      show(body.detail ?? "Could not load the recorder options", "bad");
+      return;
+    }
+    fill(pose, body.poses, "center");
+    fill(lighting, body.lighting, "lit");
+    fill(attack, body.attacks, "none");
+    frames.value = String(body.default_frames);
+  }
+
+  function remember(): void {
+    try {
+      localStorage.setItem("face-id-record-person", person.value.trim());
+      localStorage.setItem("face-id-record-session", session.value.trim());
+    } catch {
+      // Not remembering the labels is fine.
+    }
+    refresh().catch(() => show("The API is unreachable.", "bad"));
+  }
+
+  person.addEventListener("change", () => {
+    consent.checked = false;
+    remember();
+  });
+  session.addEventListener("change", remember);
+  glasses.addEventListener("change", renderSteps);
+  startButton.addEventListener("click", () => void start());
+  cancelButton.addEventListener("click", () => void cancel());
+  recordButton.addEventListener("click", () => void recordManual());
+  $("labels").addEventListener("submit", (event) => event.preventDefault());
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (event.code === "Space" && !target?.closest("input, select, textarea, button, summary")) {
+      event.preventDefault();
+      void start();
+    }
+  });
+
+  $("save-token").addEventListener("click", () => {
+    saveToken(tokenInput.value);
+    Promise.all([loadOptions(), refresh()]).catch(() => show("The API is unreachable.", "bad"));
+  });
+
+  paintTicks([]);
+  Promise.all([loadOptions(), refresh(), poll()]).catch(() => show("The API is unreachable.", "bad"));
+</script>

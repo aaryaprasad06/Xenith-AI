@@ -1,4 +1,4 @@
-"""One D435 pipeline shared by the preview stream.
+"""One D435 pipeline shared by the preview stream, authentication and recording.
 
 Mirrors the RealSenseID-REST idea of a single device wrapper behind the routers.
 Face matching is not in this wrapper yet.
@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
+from collections.abc import Callable
 from typing import Literal
 
 import cv2
@@ -47,6 +48,12 @@ class CameraHub:
         self.error: str | None = None
         self._jpeg: bytes | None = None
         self._recent: deque[Frame] = deque(maxlen=16)
+        # A take in progress: the stream thread appends here until `_take_count`.
+        self._take: list[Frame] | None = None
+        self._take_count = 0
+        self._take_done = threading.Event()
+        # Called from the stream thread with every frame; keep them cheap.
+        self._listeners: list[Callable[[Frame], None]] = []
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -88,6 +95,48 @@ class CameraHub:
         with self._lock:
             return list(self._recent)
 
+    def capture(self, count: int, timeout_s: float) -> list[Frame]:
+        """The next `count` frames from the stream, in order, laser-on and laser-off both.
+
+        Raises RuntimeError when the camera is not streaming or a take is already
+        recording, and TimeoutError when the frames do not arrive in time.
+        """
+        if self.camera_state != "streaming":
+            raise RuntimeError(self.error or "camera is not streaming")
+        with self._lock:
+            if self._take is not None:
+                raise RuntimeError("a take is already recording")
+            self._take = []
+            self._take_count = count
+            self._take_done.clear()
+        done = self._take_done.wait(timeout_s)
+        with self._lock:
+            frames, self._take = self._take, None
+        if not done:
+            raise TimeoutError(f"got {len(frames)} of {count} frames in {timeout_s:.0f} s")
+        return frames
+
+    def add_listener(self, listener: Callable[[Frame], None]) -> None:
+        with self._lock:
+            self._listeners.append(listener)
+
+    def remove_listener(self, listener: Callable[[Frame], None]) -> None:
+        with self._lock:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+    def _push(self, frame: Frame, jpeg: bytes) -> None:
+        with self._lock:
+            listeners = list(self._listeners)
+            self._jpeg = jpeg
+            self._recent.append(frame)
+            if self._take is not None and len(self._take) < self._take_count:
+                self._take.append(frame)
+                if len(self._take) == self._take_count:
+                    self._take_done.set()
+        for listener in listeners:
+            listener(frame)
+
     def _run(self) -> None:
         try:
             cfg = load_config(self.config_path)
@@ -100,9 +149,7 @@ class CameraHub:
                     )
                     if not ok:
                         continue
-                    with self._lock:
-                        self._jpeg = encoded.tobytes()
-                        self._recent.append(frame)
+                    self._push(frame, encoded.tobytes())
         except (RuntimeError, OSError) as exc:
             self.error = str(exc)
             log.exception("preview stream stopped")

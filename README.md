@@ -103,6 +103,7 @@ The console proxies `/v1`, `/health`, `/authenticate`, and `/admin` to the API.
 | Page | What it calls |
 | --- | --- |
 | Preview | `GET /v1/preview/stream` (MJPEG of the left IR image), `POST /v1/auth` |
+| Record | Guided capture: `POST/GET/DELETE /v1/recordings/guided` (head-turn circle, dark, print, screen), and `GET/POST/DELETE /v1/recordings` for single takes. Admin token. Saves the same takes as `capture.recorder` to `data/raw/` (`FACE_ID_RAW`) |
 | People | `GET/POST/DELETE /v1/users` with `Authorization: Bearer <token>` |
 | Device | `GET /v1/device/info` |
 

@@ -15,6 +15,7 @@
   --accent: oklch(91% 0.012 255);
   --accent-ink: oklch(16% 0.02 255);
   --warm: oklch(76% 0.13 35);
+  --good: oklch(80% 0.17 150);
   --field: oklch(21% 0.012 255);
   --sensor: oklch(9% 0.01 255);
   --pad: 1.25rem;
@@ -151,7 +152,8 @@ h1 {
 .result.good { color: var(--accent); }
 
 .btn,
-input {
+input,
+select {
   font: inherit;
   letter-spacing: normal;
   min-height: 2.75rem;
@@ -207,6 +209,15 @@ input {
   border-radius: 3px;
   padding: 0.65rem 0.85rem;
   min-width: min(100%, 16rem);
+  font-weight: 530;
+}
+
+select {
+  color: var(--ink);
+  background: var(--field);
+  border: 0;
+  border-radius: 3px;
+  padding: 0.65rem 0.85rem;
   font-weight: 530;
 }
 
@@ -271,9 +282,192 @@ dt { color: var(--dim); }
 
 dd { margin: 0; }
 
+.recorder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.ring {
+  position: relative;
+  width: min(100%, 26rem);
+  aspect-ratio: 1;
+}
+
+.face-view {
+  position: absolute;
+  inset: 13%;
+  width: 74%;
+  height: 74%;
+  object-fit: cover;
+  border-radius: 50%;
+  background: var(--sensor);
+  color: var(--sensor);
+  /* Mirrored like a selfie camera, so turning left moves the face left. */
+  transform: scaleX(-1);
+}
+
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ring line {
+  stroke: oklch(40% 0.01 255);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  transition: stroke var(--dur-2) var(--ease-move);
+}
+
+.ring line.on { stroke: var(--good); }
+
+.ring .pointer {
+  fill: var(--ink);
+  stroke: var(--ground);
+  stroke-width: 1.5;
+  opacity: 0;
+  transition: cx var(--dur-1) linear, cy var(--dur-1) linear, opacity var(--dur-2) var(--ease-move);
+}
+
+.ring .pointer.shown { opacity: 1; }
+
+.prompt {
+  margin: 1.25rem 0 0;
+  min-height: 3em;
+  max-width: 28ch;
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.prompt.bad { color: var(--warm); }
+
+.rate {
+  margin: 0.25rem 0 0;
+  min-height: 1.4em;
+  color: var(--dim);
+  font-size: 0.8125rem;
+}
+
+.prompt.good { color: var(--good); }
+
+.actions {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+ol.steps {
+  list-style: none;
+  padding: 0;
+  margin: 2rem 0 0;
+  width: 100%;
+  max-width: 40rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: var(--field);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-move);
+}
+
+.step:hover { border-color: oklch(40% 0.01 255); }
+
+.step.selected { border-color: var(--accent); }
+
+.step-title { font-weight: 700; font-size: 0.9375rem; }
+
+.step.done .step-title { color: var(--good); }
+
+.step-how { color: var(--dim); font-size: 0.8125rem; line-height: 1.35; }
+
+.panel h2 {
+  margin: 2rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.panel .token { margin-top: 0; }
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 1rem;
+  margin-top: 1.25rem;
+}
+
+.fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--dim);
+  font-size: 0.875rem;
+}
+
+.fields label input,
+.fields label select { min-width: 0; width: 100%; }
+
+.fields label.check {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.fields label.check input {
+  width: 1.1rem;
+  min-height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.manual {
+  margin-top: 2.5rem;
+}
+
+.manual summary {
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--dim);
+}
+
 @keyframes settle {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .recorder { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  ol.steps { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 700px) {

@@ -63,7 +63,7 @@ not built) → door decision (no relay/state machine yet).
 - **`web/`**: Astro console that proxies `/v1`, `/health`, `/authenticate`, `/admin` to the API.
 - **`configs/default.yaml`** holds every threshold. `capture/config.py`
   requires all sections (`camera`, `quality`, `liveness`, `match`, `door`,
-  `filters`, `emitter`, `preview`) even if unused yet.
+  `filters`, `emitter`, `preview`, `guide`) even if unused yet.
 
 ## Conventions
 

@@ -16,9 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import Settings, load_settings
 from api.deps import get_camera, get_users, require_admin
-from api.routers.v1 import auth, device, preview, users
+from api.routers.v1 import auth, device, preview, recordings, users
 from api.schemas import AuthResponse, DeleteResponse, EnrollResponse, HealthResponse
 from api.services.camera import CameraHub
+from api.services.guided import GuidedRecorder
 from api.services.users import UserStore
 
 log = logging.getLogger(__name__)
@@ -35,8 +36,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             config_path=str(settings.config_path) if settings.config_path else None,
         )
         application.state.camera.start()
+        application.state.guided = GuidedRecorder(application.state.camera, settings.raw_root)
         log.info("camera state: %s", application.state.camera.camera_state)
         yield
+        application.state.guided.cancel()
         application.state.camera.stop()
 
     app = FastAPI(
@@ -92,6 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users.router, prefix=prefix)
     app.include_router(preview.router, prefix=prefix)
     app.include_router(device.router, prefix=prefix)
+    app.include_router(recordings.router, prefix=prefix)
     return app
 
 

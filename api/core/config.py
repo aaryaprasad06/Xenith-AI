@@ -29,6 +29,7 @@ class Settings:
         "http://localhost:4321",
     )
     db_path: Path = Path("data/users.db")
+    raw_root: Path = Path("data/raw")
     config_path: Path | None = None
 
 
@@ -40,5 +41,6 @@ def load_settings() -> Settings:
         camera_enabled=os.environ.get("FACE_ID_CAMERA", "1") != "0",
         cors_origins=tuple(o.strip() for o in origins.split(",")) if origins else Settings.cors_origins,
         db_path=Path(os.environ.get("FACE_ID_DB", "data/users.db")),
+        raw_root=Path(os.environ.get("FACE_ID_RAW", "data/raw")),
         config_path=Path(os.environ["FACE_ID_CONFIG"]) if os.environ.get("FACE_ID_CONFIG") else None,
     )

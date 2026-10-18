@@ -4,7 +4,7 @@ import "../styles/global.css";
 
 interface Props {
   title: string;
-  current: "preview" | "users" | "device";
+  current: "preview" | "record" | "users" | "device";
 }
 
 const { title, current } = Astro.props;
@@ -21,6 +21,7 @@ const { title, current } = Astro.props;
       <a class="mark" href="/">Face-ID</a>
       <nav>
         <a href="/" aria-current={current === "preview" ? "page" : undefined}>Preview</a>
+        <a href="/record" aria-current={current === "record" ? "page" : undefined}>Record</a>
         <a href="/users" aria-current={current === "users" ? "page" : undefined}>People</a>
         <a href="/device" aria-current={current === "device" ? "page" : undefined}>Device</a>
       </nav>

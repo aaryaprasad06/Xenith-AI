@@ -16,6 +16,7 @@ REQUIRED_SECTIONS = (
     "filters",
     "emitter",
     "preview",
+    "guide",
 )
 REQUIRED_CAMERA_KEYS = ("width", "height", "fps", "depth_units")
 

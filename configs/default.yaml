@@ -23,3 +23,15 @@ emitter:
 
 preview:
   center_box_frac: 0.1
+
+# Guided recording on the console's Record page (enroll/guide.py). Head turns
+# are degrees from face/pose.py (depth at the eyes and mouth corners), measured
+# from the person's own straight-ahead pose. A turn counts for a direction when
+# it reaches the ellipse reach_yaw_deg × reach_pitch_deg. Starting values.
+guide:
+  center_max_deg: 6
+  reach_yaw_deg: 18
+  reach_pitch_deg: 12
+  pairs_per_pose: 6
+  ticks: 48
+  timeout_s: 180
