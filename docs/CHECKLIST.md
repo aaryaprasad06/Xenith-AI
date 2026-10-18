@@ -67,8 +67,9 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Step 4: Baseline identity
 
-- [ ] Download SFace model; record it in `docs/CITATIONS.md`
-- [ ] `face/embed.py`: SFace on aligned IR crop, 128-D, L2-normalised
+- [x] Download SFace model; record it in `docs/CITATIONS.md` (fetched by `python -m face.models`, sha256-pinned, not in git)
+- [x] `face/embed.py`: SFace on aligned IR crop, 128-D, L2-normalised. Also ArcFace R50 (buffalo_l), 512-D (2026-10-18)
+- [ ] Pick the model from `eval.far_frr` once 2+ people are recorded
 - [ ] `face/match.py`: gallery matrix, `scores = gallery @ query`, threshold, `unknown`
 - [ ] Unit tests with known embeddings
 - [ ] **Check:** correct match for enrolled people, `unknown` for strangers

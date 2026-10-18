@@ -22,6 +22,7 @@ so modules run from the repo root with `python -m`.
 
 ```bash
 uv sync                                   # install
+uv run python -m face.models              # fetch embedding models (not in git)
 uv run pytest                             # all tests, no camera needed
 uv run pytest tests/test_liveness.py::test_flat_print_is_rejected   # one test
 uv run ruff check . && uv run ruff format .       # lint / format
@@ -29,6 +30,7 @@ uv run ruff check . && uv run ruff format .       # lint / format
 uv run python -m capture.realsense_stream # live IR + depth preview (needs D435)
 uv run python -m liveness.watch           # live liveness overlay
 uv run python -m capture.recorder --person p001 --session s1 --pose center --lighting lit --consent
+uv run python -m eval.far_frr --embedder arcface_r50   # or sface / raw_pixels; needs 2+ people
 
 cp .env.example .env && ./dev.sh          # API :8000 + Astro console :4321
 cd web && pnpm install                    # first time only

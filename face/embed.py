@@ -52,3 +52,44 @@ class RawPixelEmbedder:
         pixels = small.astype(np.float32).ravel()
         pixels -= pixels.mean()
         return Embedding(vector=l2_normalise(pixels), quality=1.0)
+
+
+def _bgr(ir_crop: np.ndarray) -> np.ndarray:
+    return ir_crop if ir_crop.ndim == 3 else cv2.cvtColor(ir_crop, cv2.COLOR_GRAY2BGR)
+
+
+class SFaceEmbedder:
+    """SFace (OpenCV Zoo), 128-D. Small and fast; trained on visible-light faces."""
+
+    name = "sface"
+
+    def __init__(self, path: str | None = None) -> None:
+        from face.models import model_file
+
+        self._model = cv2.FaceRecognizerSF.create(path or str(model_file("sface")), "")
+
+    def embed(self, ir_crop: np.ndarray, depth_crop: np.ndarray | None = None) -> Embedding:
+        # The crop from `align_crop` already uses the template SFace was trained on.
+        return Embedding(vector=l2_normalise(self._model.feature(_bgr(ir_crop))), quality=1.0)
+
+
+class ArcFaceEmbedder:
+    """ArcFace ResNet-50 trained on WebFace600K (InsightFace buffalo_l), 512-D.
+
+    Large ArcFace models are reported to carry over from colour to near-infrared
+    faces with little loss, which small models do not. Non-commercial weights.
+    """
+
+    name = "arcface_r50"
+
+    def __init__(self, path: str | None = None) -> None:
+        from face.models import model_file
+
+        self._net = cv2.dnn.readNetFromONNX(path or str(model_file("arcface_r50")))
+
+    def embed(self, ir_crop: np.ndarray, depth_crop: np.ndarray | None = None) -> Embedding:
+        blob = cv2.dnn.blobFromImage(
+            _bgr(ir_crop), 1 / 127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True
+        )
+        self._net.setInput(blob)
+        return Embedding(vector=l2_normalise(self._net.forward()), quality=1.0)

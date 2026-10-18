@@ -43,11 +43,21 @@ from eval.metrics import (
 )
 from face.align import align_crop
 from face.detect import Detection
-from face.embed import Embedder, RawPixelEmbedder, l2_normalise
+from face.embed import (
+    ArcFaceEmbedder,
+    Embedder,
+    RawPixelEmbedder,
+    SFaceEmbedder,
+    l2_normalise,
+)
 
 Split = Literal["cross-session", "cross-take"]
 Emitter = Literal["on", "off", "any"]
-EMBEDDERS: dict[str, Callable[[], Embedder]] = {"raw_pixels": RawPixelEmbedder}
+EMBEDDERS: dict[str, Callable[[], Embedder]] = {
+    "raw_pixels": RawPixelEmbedder,
+    "sface": SFaceEmbedder,
+    "arcface_r50": ArcFaceEmbedder,
+}
 FMR_TARGETS = (1e-2, 1e-3, 1e-4)
 FPIR_TARGETS = (1e-2, 1e-3)
 DEFAULT_OUT = DEFAULT_ROOT.parent / "eval"

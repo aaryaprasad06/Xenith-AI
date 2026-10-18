@@ -376,6 +376,30 @@ Frames with exactly one face of at least 80 px (YuNet on the stored IR):
 
 Next: session 2 on another day, a printed photo when one is available, and a second person so `eval.far_frr` can run.
 
+## 2026-10-18 — R2 starts: SFace and ArcFace as embedders
+
+Two real face models are now `Embedder`s next to the raw-pixel floor, so `eval.far_frr --embedder sface|arcface_r50` compares them on the same takes.
+
+- **SFace** (OpenCV Zoo, 128-D, Apache-2.0) through `cv2.FaceRecognizerSF`, about 3 ms per face.
+- **ArcFace R50** (InsightFace buffalo_l `w600k_r50`, 512-D, non-commercial) through `cv2.dnn`, about 22 ms per face. Chosen because the research found large ArcFace models carry over from colour to near-infrared with little loss, while small models degrade.
+- Both run in OpenCV, so no new dependency. The files are too large for git (ArcFace is 175 MB): `face/models.py` pins each by sha256 and `uv run python -m face.models` downloads and checks them. `.gitignore` keeps `models/*.onnx` out except YuNet.
+
+First look on p001 s1 (laser-off frames, each take averaged): cosine similarity of every take to `center_lit`.
+
+| Take | raw_pixels | sface | arcface_r50 |
+| --- | --- | --- | --- |
+| center_dark | 0.74 | 0.59 | 0.78 |
+| left / right | -0.02 / 0.39 | 0.65 / 0.56 | 0.78 / 0.72 |
+| up / down | 0.38 / 0.27 | 0.34 / 0.39 | 0.55 / 0.65 |
+| diagonals | -0.10 to 0.50 | 0.45 to 0.54 | 0.63 to 0.73 |
+| center_lit_screen (spoof) | -0.05 | 0.14 | 0.56 |
+
+- Raw pixels fall apart once the head turns, as expected of a floor. Both models hold the same person across poses and in the dark on IR, and ArcFace holds them highest.
+- This is only same-person similarity. Whether the models separate people needs a second person; until then nothing here is a FAR or FRR.
+- ArcFace matches the phone-screen photo to Alan (0.56). Identity alone would accept that spoof; the depth liveness check is what stops it, so liveness must stay ahead of matching.
+
+Next: `eval.far_frr` on all three embedders once p002 is recorded.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

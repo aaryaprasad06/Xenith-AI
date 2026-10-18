@@ -15,5 +15,9 @@ web/node_modules/
 web/dist/
 web/.astro/
 
+# Embedding models are fetched and sha256-checked by `python -m face.models`.
+models/*.onnx
+!models/face_detection_yunet_2023mar.onnx
+
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
