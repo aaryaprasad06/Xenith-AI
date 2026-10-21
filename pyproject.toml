@@ -29,3 +29,18 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.10",
 ]
+# Only for face.adaface_export, which turns the AdaFace PyTorch weights into ONNX once.
+# CUDA build so step 7 training can reuse it; the export itself runs on the CPU.
+export = [
+    "onnx",
+    "safetensors",
+    "torch",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu132" }
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true

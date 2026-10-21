@@ -41,3 +41,16 @@ Used by `face.embed.SFaceEmbedder` through `cv2.FaceRecognizerSF`, 128-D, on the
 | Training data | WebFace600K, a cleaned subset of WebFace260M (Zhu et al., CVPR 2021) |
 
 Used by `face.embed.ArcFaceEmbedder` through `cv2.dnn`, 512-D, input scaled to [-1, 1]. Runs in about 22 ms per face on this machine.
+
+## AdaFace IR-101 (CVLFace, WebFace12M)
+
+| | |
+| --- | --- |
+| File | `models/adaface_ir101_webface12m.onnx` (not in git; exported by `uv run --group export python -m face.adaface_export`) |
+| Source weights | `model.safetensors` from [minchul/cvlface_adaface_ir101_webface12m](https://huggingface.co/minchul/cvlface_adaface_ir101_webface12m) at revision `54f602a0737bd1ee4a4e7e9fd089a485f397fefd`, saved as `models/adaface_ir101_webface12m.safetensors` (`uv run python -m face.models adaface_ir101_weights`) |
+| sha256 (weights) | `2ea535a43877bd3de8091903935c783ce335be66a9f8917fae9a7a18ae4bbf56` |
+| License | Code (CVLFace, AdaFace) is MIT. The model card asks users to follow the training data's license; WebFace260M is for non-commercial research. Accepted for this college project, as for ArcFace. |
+| Paper | Minchul Kim, Anil K. Jain, Xiaoming Liu. *AdaFace: Quality Adaptive Margin for Face Recognition.* CVPR 2022. https://arxiv.org/abs/2204.00964 |
+| Training data | WebFace12M, a subset of WebFace260M (Zhu et al., CVPR 2021) |
+
+No ONNX file is published, so `face/adaface_export.py` rebuilds the IR-101 network locally, loads the weights strictly (every key must match), exports to ONNX, and keeps the file only if OpenCV agrees with PyTorch to within 1e-3 (8.7e-6 on 2026-10-19). The repository's own `trust_remote_code` loader is not used. Used by `face.embed.AdaFaceEmbedder` through `cv2.dnn`, 512-D, RGB scaled to [-1, 1] on the ArcFace 5-point template. The raw output's length is returned as the quality number. Runs in about 42 ms per face on this machine.

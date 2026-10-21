@@ -38,7 +38,8 @@ that is deferred (PRD, section 7).
 
 ```bash
 uv sync
-uv run python -m face.models   # embedding models (SFace, ArcFace), sha256-checked
+uv run python -m face.models   # embedding models (SFace, ArcFace, AdaFace weights), sha256-checked
+uv run --group export python -m face.adaface_export   # AdaFace to ONNX, once
 uv run pytest        # no camera needed
 ```
 

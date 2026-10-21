@@ -93,3 +93,28 @@ class ArcFaceEmbedder:
         )
         self._net.setInput(blob)
         return Embedding(vector=l2_normalise(self._net.forward()), quality=1.0)
+
+
+class AdaFaceEmbedder:
+    """AdaFace IR-101 trained on WebFace12M (CVLFace release), 512-D.
+
+    AdaFace trains with a margin that adapts to image quality, so blurred, dark
+    or turned faces pull the model less. The length of the raw output before
+    normalising is the model's own quality estimate and is returned as `quality`.
+    """
+
+    name = "adaface_ir101"
+
+    def __init__(self, path: str | None = None) -> None:
+        from face.models import model_file
+
+        self._net = cv2.dnn.readNetFromONNX(path or str(model_file("adaface_ir101")))
+
+    def embed(self, ir_crop: np.ndarray, depth_crop: np.ndarray | None = None) -> Embedding:
+        # The CVLFace weights take RGB scaled to [-1, 1], aligned to the ArcFace template.
+        blob = cv2.dnn.blobFromImage(
+            _bgr(ir_crop), 1 / 127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True
+        )
+        self._net.setInput(blob)
+        raw = self._net.forward().ravel()
+        return Embedding(vector=l2_normalise(raw), quality=float(np.linalg.norm(raw)))

@@ -7,7 +7,7 @@ import pytest
 
 from eval.far_frr import EMBEDDERS
 from face import models
-from face.embed import ArcFaceEmbedder, RawPixelEmbedder, SFaceEmbedder
+from face.embed import AdaFaceEmbedder, ArcFaceEmbedder, RawPixelEmbedder, SFaceEmbedder
 from face.models import MODELS, ModelFile, fetch, model_file, sha256_of
 
 
@@ -24,13 +24,14 @@ def _crop(seed: int) -> np.ndarray:
 
 
 def test_every_registered_embedder_has_its_name():
-    assert set(EMBEDDERS) == {"raw_pixels", "sface", "arcface_r50"}
+    assert set(EMBEDDERS) == {"raw_pixels", "sface", "arcface_r50", "adaface_ir101"}
     assert RawPixelEmbedder.name == "raw_pixels"
     assert SFaceEmbedder.name == "sface"
     assert ArcFaceEmbedder.name == "arcface_r50"
+    assert AdaFaceEmbedder.name == "adaface_ir101"
 
 
-@pytest.mark.parametrize(("cls", "dim"), [(SFaceEmbedder, 128), (ArcFaceEmbedder, 512)])
+@pytest.mark.parametrize(("cls", "dim"), [(SFaceEmbedder, 128), (ArcFaceEmbedder, 512), (AdaFaceEmbedder, 512)])
 def test_model_embedders_give_stable_unit_vectors(cls, dim):
     if not _have(cls.name):
         pytest.skip(f"run: uv run python -m face.models {cls.name}")
@@ -48,6 +49,19 @@ def test_model_embedders_give_stable_unit_vectors(cls, dim):
 def test_missing_model_says_how_to_fetch_it(tmp_path: Path):
     with pytest.raises(FileNotFoundError, match="python -m face.models sface"):
         model_file("sface", models_dir=tmp_path)
+
+
+def test_missing_export_says_how_to_make_it(tmp_path: Path):
+    with pytest.raises(FileNotFoundError, match="python -m face.adaface_export"):
+        model_file("adaface_ir101", models_dir=tmp_path)
+
+
+def test_adaface_quality_is_the_raw_length():
+    if not _have("adaface_ir101"):
+        pytest.skip("run: uv run --group export python -m face.adaface_export")
+    out = AdaFaceEmbedder().embed(_crop(0))
+    assert out.quality > 0.0
+    assert out.quality != pytest.approx(1.0)
 
 
 def _serve(monkeypatch, payload: bytes) -> None:

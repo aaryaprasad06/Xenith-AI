@@ -3,7 +3,7 @@
 Tracks the build against [PRD.md](PRD.md). Tick items as they are done.
 
 **Platform:** current x86_64 Linux machine. Raspberry Pi work is deferred.
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-19
 
 Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
@@ -42,7 +42,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] **Check:** center-box distance matches a tape measure. Checked 2026-10-05: correct from 10 cm to about 100 cm on black and green walls. Not checked past 100 cm. A white wall reads `n/a` (IR image clips, so there is no depth).
 - [ ] Decide hole-filling mode (1 vs 2) from real face data
 - [x] `capture/recorder.py`: save synchronised IR + depth (+ RGB) with labels to `data/raw/` (also needed for step 7)
-- [x] Console Record page (`/record`): guided head-turn circle, dark and spoof steps (`/v1/recordings/guided`), plus a manual single take (`POST /v1/recordings`), through the API's camera (2026-10-18). Not yet run on the camera
+- [x] Console Record page (`/record`): guided head-turn circle, dark and spoof steps (`/v1/recordings/guided`), plus a manual single take (`POST /v1/recordings`), through the API's camera (2026-10-18). First session (p001 s1) recorded on the camera 2026-10-18
 - [ ] Tune `guide.reach_min` / `center_max` on the camera
 - [x] `.gitignore` entry for `data/`; first git commit
 
@@ -68,7 +68,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 ## Step 4: Baseline identity
 
 - [x] Download SFace model; record it in `docs/CITATIONS.md` (fetched by `python -m face.models`, sha256-pinned, not in git)
-- [x] `face/embed.py`: SFace on aligned IR crop, 128-D, L2-normalised. Also ArcFace R50 (buffalo_l), 512-D (2026-10-18)
+- [x] `face/embed.py`: SFace on aligned IR crop, 128-D, L2-normalised. Also ArcFace R50 (buffalo_l), 512-D (2026-10-18), and AdaFace IR-101 (WebFace12M), 512-D, exported to ONNX (2026-10-19)
 - [ ] Pick the model from `eval.far_frr` once 2+ people are recorded
 - [ ] `face/match.py`: gallery matrix, `scores = gallery @ query`, threshold, `unknown`
 - [ ] Unit tests with known embeddings

@@ -400,6 +400,29 @@ First look on p001 s1 (laser-off frames, each take averaged): cosine similarity 
 
 Next: `eval.far_frr` on all three embedders once p002 is recorded.
 
+## 2026-10-19 — AdaFace IR-101 added as a third embedder
+
+AdaFace trains with a margin that adapts to image quality, so dark or turned faces pull the model less. That fits laser-off IR crops. It is now `eval.far_frr --embedder adaface_ir101`.
+
+- **Weights.** The CVLFace IR-101 trained on WebFace12M (512-D). Only PyTorch weights are published, so `face/adaface_export.py` rebuilds the network locally (no `trust_remote_code`), loads the pinned `model.safetensors` strictly, and exports ONNX once. OpenCV matches PyTorch to 8.7e-6.
+- **Torch only for the export.** A new `export` dependency group holds torch, safetensors and onnx. The embedder itself runs in `cv2.dnn`, so the normal install is unchanged. Torch is the CUDA 13.2 build (`pytorch-cu132` index; driver 610.57, RTX 4060) so step 7 training can reuse it; the export itself runs on the CPU.
+- **Speed.** About 42 ms per face, against 23 ms for ArcFace R50 and 3 ms for SFace.
+- **Quality number.** The length of the raw output before normalising is AdaFace's own quality estimate. On p001 s1 it is highest for `center_lit` (24.9) and lowest for the phone screen (22.1). Too few takes to use it for anything yet.
+
+Same check as for ArcFace (p001 s1, laser-off frames, each take averaged, cosine to `center_lit`):
+
+| Take | sface | arcface_r50 | adaface_ir101 |
+| --- | --- | --- | --- |
+| center_dark | 0.59 | 0.78 | 0.79 |
+| left / right | 0.65 / 0.56 | 0.78 / 0.72 | 0.76 / 0.74 |
+| up / down | 0.34 / 0.39 | 0.55 / 0.65 | 0.67 / 0.67 |
+| diagonals | 0.45 to 0.54 | 0.63 to 0.73 | 0.64 to 0.75 |
+| center_lit_screen (spoof) | 0.14 | 0.56 | 0.58 |
+
+- SFace and ArcFace give the same numbers as on 2026-10-18, so the setup is unchanged.
+- AdaFace is about level with ArcFace, a little better looking up (0.67 against 0.55). Same-person only; the choice still waits for p002.
+- AdaFace also matches the phone screen (0.58). Liveness stays ahead of matching.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.
