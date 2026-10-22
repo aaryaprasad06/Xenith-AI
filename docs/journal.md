@@ -7,7 +7,7 @@ How to run the capture code is in the [README](../README.md) and [capture.md](ca
 **Project:** realsense-face-id
 **Owner:** Alan Francis Santhosh
 **Camera:** Intel RealSense D435, serial `236422073835`, firmware `5.17.3.10`, USB id `8086:0b07`
-**Machine:** this x86_64 Linux laptop. Raspberry Pi 4 is the PRD's eventual target and is out of scope for now.
+**Machines:** the x86_64 Linux laptop, which is where entries through 2026-10-19 were made. Ameen's Windows laptop (host `ameenas`) is a second machine: the 2026-10-22 recordings and `eval.far_frr` runs were made there, with this same D435 plugged in. `data/raw` and `data/eval` on the two laptops are not the same files. Do not copy one onto the other. `p001/s1` on Ameen's laptop is a different person from Alan's 18 October `p001/s1` on the Linux laptop. Raspberry Pi 4 is the PRD's eventual target and is out of scope for now.
 
 ---
 
@@ -357,7 +357,7 @@ Second try on this D435: the circle filled faster, but up and down still stuck, 
 
 ## 2026-10-18 — First guided session recorded (p001 s1)
 
-Alan recorded himself with the guided Record page on this D435 (serial `236422073835`). With the depth-based head pose the pointer dot moves the right way and the circle completes, in about 12 s. Takes in `data/raw/p001/s1/`: `center_lit` and the eight directions (12 frames each), `center_dark` and `center_lit_screen` (30 frames each). No printed photo was at hand, so `center_lit_print` is missing.
+On the Linux laptop, Alan recorded himself with the guided Record page on this D435 (serial `236422073835`). With the depth-based head pose the pointer dot moves the right way and the circle completes, in about 12 s. Takes in `data/raw/p001/s1/` on that laptop: `center_lit` and the eight directions (12 frames each), `center_dark` and `center_lit_screen` (30 frames each). No printed photo was at hand, so `center_lit_print` is missing.
 
 Frames with exactly one face of at least 80 px (YuNet on the stored IR):
 
@@ -423,6 +423,90 @@ Same check as for ArcFace (p001 s1, laser-off frames, each take averaged, cosine
 - AdaFace is about level with ArcFace, a little better looking up (0.67 against 0.55). Same-person only; the choice still waits for p002.
 - AdaFace also matches the phone screen (0.58). Liveness stays ahead of matching.
 
+## 2026-10-22 — Windows metadata, before any recording
+
+On Ameen's Windows laptop the API came up and `GET /v1/device/info` read this D435 (serial `236422073835`, firmware `5.17.3.10`, USB 3.2). The preview then stopped. `/health` stayed `camera: error`, and `/v1/preview/stream` returned 503. The stream raised `depth frame has no frame_laser_power_mode metadata`. That message names the Linux udev patch. On Windows the same gap is the metadata registry: the depth and RGB nodes were present and `Status OK` on the inbox `usbvideo` driver, and `MetadataBufferSizeInKB*` was missing. Two phantom nodes from an earlier USB port (`6&D043D2C`) were not the camera in use.
+
+The keys are present now, which is what `realsense_metadata_win10.ps1 -op install` writes. Depth interface `6&30854A99`: `MetadataBufferSizeInKB0` through `3`, each 5. RGB interface: `MetadataBufferSizeInKB0` = 5. The recordings below alternate laser-on and laser-off, so emitter tags were available by 05:50 UTC.
+
+## 2026-10-22 — Second person, first session (p002 s1)
+
+Recorded on Ameen's Windows laptop, not the Linux laptop. p002 recorded a full guided session on this D435 (serial `236422073835`), wearing glasses. Takes in `data/raw/p002/s1/` on that laptop only: `center_lit_glasses` and the eight directions (12 frames each), then `center_dark_glasses`, `center_lit_print` and `center_lit_screen` (30 frames each). Every take alternates laser-on then laser-off. The circle finished. Alan's 18 October `p001/s1` on the Linux laptop has no print; this session does. Genuine takes are labelled `glasses: true`. The two spoof takes are not.
+
+Same count as the 18 October check: frames with exactly one face of at least 80 px (YuNet on the stored IR). Misses below are frames with no face. No frame had two faces.
+
+| Take | Laser-on | Laser-off |
+| --- | --- | --- |
+| center_lit_glasses | 6/6 | 6/6 |
+| right, up_right | 5/6, 5/6 | 6/6, 6/6 |
+| up | 4/6 | 6/6 |
+| up_left | 3/6 | 6/6 |
+| left | 2/6 | 6/6 |
+| down_left, down_right | 1/6, 1/6 | 6/6, 6/6 |
+| down | 0/6 | 6/6 |
+| center_dark_glasses | 7/15 | 14/15 |
+| center_lit_print | 0/15 | 15/15 |
+| center_lit_screen | 0/15 | 15/15 |
+
+- **Laser-off is still the identity frame.** Every genuine laser-off frame has one face, except one dark frame. Looking down still wipes the face out of the laser-on image, the same pattern as Alan's 18 October session on the Linux laptop.
+- The print and the screen are found on every laser-off frame and on no laser-on frame. Identity would see both spoofs. Liveness has to reject them.
+- The dark take is usable on laser-off IR, and its laser-on count (7/15) is higher than Alan's 18 October `p001` on the Linux laptop (1/15). That comparison is across laptops, not two takes in one folder.
+- Embedding weights were not in `models/` on Ameen's laptop yet, so the cosine check from 2026-10-18 was not repeated. They were fetched later the same day, before the `far_frr` runs below. This session is one person with glasses only.
+
+Next: p002 on another day without glasses if they can, and the three embedders on p001 plus p002.
+
+## 2026-10-22 — p001 s1 on Ameen's laptop, no print
+
+A second person was recorded on Ameen's Windows laptop as `p001` `s1` on this D435 (serial `236422073835`), without glasses. This is not Alan's 18 October `p001/s1`. Those files stay on the Linux laptop. The two folders share a name and must not be copied over each other. Takes on Ameen's laptop: `center_lit` and the eight directions, `center_dark`, and `center_lit_screen`. No printed photo, so `center_lit_print` is absent. That does not block `eval.far_frr`: spoof takes are skipped, and p002 on this same laptop already has a print.
+
+Same count: frames with exactly one face of at least 80 px. Misses are frames with no face. No frame had two faces.
+
+| Take | Laser-on | Laser-off |
+| --- | --- | --- |
+| center_lit | 6/6 | 5/5 |
+| right | 6/6 | 6/6 |
+| up | 5/6 | 6/6 |
+| up_right | 3/6 | 6/6 |
+| up_left | 1/6 | 6/6 |
+| left | 2/6 | 6/6 |
+| down | 3/6 | 6/6 |
+| down_left, down_right | 0/6, 0/6 | 6/6, 6/6 |
+| center_dark | 4/15 | 12/15 |
+| center_lit_screen | 5/15 | 15/15 |
+
+- **Laser-off is usable on every genuine take.** The directions are 6/6. `center_lit` saved 11 frames: the first two are both laser-on, then five on/off pairs, so the laser-off count is 5/5.
+- The dark take missed 3 of 15 laser-off frames. Twelve remain, which is enough to embed.
+- The screen is found on every laser-off frame. Identity would see it. Liveness has to reject it.
+- `p001` and `p002` are now both on disk, so `eval.far_frr --protocol cross-take --emitter off` can run.
+
+## 2026-10-22 — First far_frr on the two sessions
+
+Run on Ameen's Windows laptop, using only the `p001` and `p002` takes recorded there the same day. Alan's 18 October session was not in this run. An earlier run the same morning, with only `p002` on disk, stopped immediately: `need at least 2 enrolled people for impostor scores, have 1`. SFace and ArcFace weights were downloaded on this laptop first (`face.models`). `eval.far_frr --protocol cross-take --emitter off` on `p001` s1 and `p002` s1. Spoofs skipped. `cross-session` was not run: each person has only `s1`. Each person contributes 10 genuine takes; alternate takes enrol and the rest probe, so 10 probes, 10 genuine scores and 10 impostor scores, and only 1 person pair. Reports in `data/eval/sface_cross-take_off` and `data/eval/arcface_r50_cross-take_off`.
+
+| Embedder | Genuine (min–max) | Impostor (min–max) | EER | Rank-1 |
+| --- | --- | --- | --- | --- |
+| sface | 0.52–0.81 | 0.29–0.65 | 10% at 0.646 | 100% |
+| arcface_r50 | 0.69–0.87 | 0.14–0.25 | 0% at 0.691 | 100% |
+
+- ArcFace leaves a gap: the weakest same-person score is 0.69 (`p001` `center_lit`) and the strongest other-person score is 0.25. No probe is closer to the wrong person.
+- SFace overlaps. The weakest genuine is 0.52 (`p001` `center_lit`). The strongest impostor is 0.65 (`p002` `down_lit_glasses` against `p001`). Clearing every impostor rejects 3 of 10 genuine probes (FNMR 30% at 0.654). Rank-1 is still 100% because the right person remains the nearer of the two.
+- The FMR bound prints `1.00e+00` for both. It is the rule of three on person pairs, `3/1`, capped at 1. One pair cannot show a 1% false-match rate, which is why every target line says "too few impostors to resolve." The 0% EER is "no mistake on these 10 probes," not a door threshold.
+- This is the optimistic split: enrol and probe are poses from the same minute. `cross-session` still needs a second day.
+
+## 2026-10-22 — AdaFace on the same two sessions
+
+Run on Ameen's Windows laptop, on the same takes as the SFace and ArcFace runs above. `adaface_ir101` on the same `cross-take`, laser-off split. The ONNX export matches the PyTorch weights to 1.26e-05. Report in `data/eval/adaface_ir101_cross-take_off`.
+
+| Embedder | Genuine (min–max) | Impostor (min–max) | EER | Rank-1 |
+| --- | --- | --- | --- | --- |
+| sface | 0.52–0.81 | 0.29–0.65 | 10% at 0.646 | 100% |
+| arcface_r50 | 0.69–0.87 | 0.14–0.25 | 0% at 0.691 | 100% |
+| adaface_ir101 | 0.72–0.87 | 0.11–0.22 | 0% at 0.718 | 100% |
+
+- AdaFace leaves a slightly wider gap than ArcFace. The weakest same-person score is 0.72 (`p001` `up_left_lit`) and the strongest other-person score is 0.22. No probe is closer to the wrong person.
+- The FMR bound is again `1.00e+00`, and every target line is unresolved. Same reason: one person pair. The 0% EER is still "no mistake on these 10 probes."
+- On this dry run AdaFace and ArcFace both separate the two people, and SFace does not. Choosing between AdaFace and ArcFace waits for a second day and more people.
+
 ## How to add an entry
 
-Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the config value, and the pass/fail result in the entry. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.
+Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the laptop, the config value, and the pass/fail result in the entry. Name the laptop when it is not the Linux one. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

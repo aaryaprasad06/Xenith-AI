@@ -42,7 +42,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] **Check:** center-box distance matches a tape measure. Checked 2026-10-05: correct from 10 cm to about 100 cm on black and green walls. Not checked past 100 cm. A white wall reads `n/a` (IR image clips, so there is no depth).
 - [ ] Decide hole-filling mode (1 vs 2) from real face data
 - [x] `capture/recorder.py`: save synchronised IR + depth (+ RGB) with labels to `data/raw/` (also needed for step 7)
-- [x] Console Record page (`/record`): guided head-turn circle, dark and spoof steps (`/v1/recordings/guided`), plus a manual single take (`POST /v1/recordings`), through the API's camera (2026-10-18). First session (p001 s1) recorded on the camera 2026-10-18
+- [x] Console Record page (`/record`): guided head-turn circle, dark and spoof steps (`/v1/recordings/guided`), plus a manual single take (`POST /v1/recordings`), through the API's camera (2026-10-18). First session (p001 s1) recorded on the Linux laptop 2026-10-18. On Ameen's Windows laptop, 2026-10-22: p002 s1 (glasses, print, and screen) and a different person stored as p001 s1, without a print. Those `data/raw` folders are not the Linux laptop's files. Laser-off frames are usable on every genuine take there
 - [ ] Tune `guide.reach_min` / `center_max` on the camera
 - [x] `.gitignore` entry for `data/`; first git commit
 
@@ -131,7 +131,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Step 9: Evaluation + threshold tuning
 
-- [x] `eval/far_frr.py`: ROC, FMR / FNMR, EER, FPIR / FNIR, rule-of-three bound, on recorded takes for any `Embedder` (2026-10-18). Not yet run on real recordings
+- [x] `eval/far_frr.py`: ROC, FMR / FNMR, EER, FPIR / FNIR, rule-of-three bound, on recorded takes for any `Embedder` (2026-10-18). First real run 2026-10-22, on Ameen's Windows laptop only: SFace, ArcFace, and AdaFace, `cross-take`, laser-off, that laptop's p001 and p002. ArcFace and AdaFace separate them; SFace overlaps. One person pair cannot resolve a 1% FMR. Not combined with the Linux laptop's 18 October session
 - [ ] `eval/spoof_eval.py`: APCER, BPCER, ACER per attack type
 - [ ] Ablation: geometry-only vs model-only vs fused
 - [ ] Lit vs dark room; glasses and makeup cases
