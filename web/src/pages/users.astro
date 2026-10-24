@@ -4,19 +4,52 @@ import Base from "../layouts/Base.astro";
 ---
 
 <Base title="People — Face-ID" current="users">
-  <div class="stack">
-    <h1>Enrol a person</h1>
-    <p class="note">Only an id is stored. Matching comes later, so the door stays locked.</p>
-    <div class="token">
-      <input id="token" type="password" placeholder="Admin token" autocomplete="current-password" />
-      <Button id="save-token" variant="quiet" type="button">Save token</Button>
-    </div>
-    <form id="enroll" class="enroll">
-      <input id="user-id" type="text" placeholder="Name or id" required maxlength="100" autocomplete="off" />
-      <Button type="submit">Enrol</Button>
-    </form>
-    <p id="message" class="result" role="status"></p>
-    <ul id="people" class="people"></ul>
+  <section class="page-heading">
+    <p class="eyebrow">02 / DIRECTORY</p>
+    <h1>People &amp; access</h1>
+    <p>Manage enrolled user IDs. Enrollment records an ID only; face matching is not available yet, so authentication remains denied.</p>
+  </section>
+
+  <div class="management-grid">
+    <section class="panel" aria-labelledby="access-heading">
+      <p class="sheet-index">01</p>
+      <h2 id="access-heading">Admin access</h2>
+      <p>Enter the admin token to load and manage the enrollment list.</p>
+      <div class="token">
+        <label for="token">Admin token</label>
+        <input id="token" type="password" placeholder="Enter admin token" autocomplete="current-password" />
+        <Button id="save-token" variant="quiet" type="button">Save token</Button>
+      </div>
+      <p id="message" class="result" role="status" aria-live="polite">Enter your admin token to load people.</p>
+
+      <section aria-labelledby="enroll-heading">
+        <p class="sheet-index">02</p>
+        <h2 id="enroll-heading">Enroll a person</h2>
+        <p>Use a unique user ID. This does not enable face matching or unlock the door.</p>
+        <form id="enroll" class="enroll">
+          <label for="user-id">User ID</label>
+          <input id="user-id" type="text" placeholder="e.g. p001" required maxlength="100" autocomplete="off" />
+          <Button type="submit">Enroll</Button>
+        </form>
+      </section>
+
+      <section aria-labelledby="people-heading">
+        <p class="sheet-index">03</p>
+        <div class="section-heading">
+          <h2 id="people-heading">Enrolled people</h2>
+          <Button id="refresh-people" variant="quiet" type="button">Refresh list</Button>
+        </div>
+        <ul id="people" class="people"></ul>
+      </section>
+    </section>
+
+    <aside class="help-panel">
+      <p class="eyebrow">NEXT STEP</p>
+      <h2>Identity starts here.</h2>
+      <p>People are currently represented by user IDs only. Capture consented enrollment data on the recording page; matching is not available yet.</p>
+      <a href="/record">Go to recording</a>
+      <p>To manage this directory, set <code>FACE_ID_ADMIN_TOKEN</code> for the API, enter it above, and save it. The token stays in this browser and is sent with protected people requests.</p>
+    </aside>
   </div>
 </Base>
 
@@ -25,10 +58,12 @@ import Base from "../layouts/Base.astro";
   import { buttonClass } from "../lib/button";
 
   const tokenInput = document.querySelector<HTMLInputElement>("#token");
-  const message = document.querySelector("#message");
-  const list = document.querySelector("#people");
+  const message = document.querySelector<HTMLElement>("#message");
+  const list = document.querySelector<HTMLUListElement>("#people");
   const form = document.querySelector<HTMLFormElement>("#enroll");
   const userId = document.querySelector<HTMLInputElement>("#user-id");
+  const saveButton = document.querySelector<HTMLButtonElement>("#save-token");
+  const refreshButton = document.querySelector<HTMLButtonElement>("#refresh-people");
 
   if (tokenInput) tokenInput.value = readToken();
 
@@ -37,6 +72,14 @@ import Base from "../layouts/Base.astro";
     const trimmed = text.trim();
     message.textContent = trimmed ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1) : trimmed;
     message.className = ok ? "result" : "result bad";
+  }
+
+  async function readBody(response: Response): Promise<any> {
+    try {
+      return await response.json();
+    } catch {
+      throw new Error("The server returned an unreadable response. Check the API and try again.");
+    }
   }
 
   function when(iso: string): string {
@@ -52,66 +95,80 @@ import Base from "../layouts/Base.astro";
   }
 
   async function refresh(preserveMessage = false): Promise<void> {
-    const response = await fetch("/v1/users", { headers: authHeaders() });
-    const body = await response.json();
-    if (!response.ok) {
-      if (!preserveMessage) show(body.detail ?? "Could not list people");
-      if (list) list.replaceChildren();
-      return;
-    }
-    if (!preserveMessage && message) {
-      if (body.users.length === 0) show("No one is enrolled yet.", true);
-      else {
-        message.textContent = "";
-        message.className = "result";
+    try {
+      const response = await fetch("/v1/users", { headers: authHeaders() });
+      const body = await readBody(response);
+      if (!response.ok) {
+        if (!preserveMessage) show(body.detail ?? "Could not list people. Check the admin token and try again.");
+        if (list) list.replaceChildren();
+        return;
       }
-    }
-    if (!list) return;
-    list.replaceChildren();
-    for (const person of body.users) {
-      const item = document.createElement("li");
-      const name = document.createElement("span");
-      name.className = "person";
-      name.textContent = person.user_id;
-      const time = document.createElement("span");
-      time.className = "when";
-      time.textContent = when(person.created_at);
-      name.append(time);
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = buttonClass("danger");
-      remove.textContent = "Delete";
-      remove.addEventListener("click", async () => {
-        const deleted = await fetch(`/v1/users/${encodeURIComponent(person.user_id)}`, {
-          method: "DELETE",
-          headers: authHeaders(),
+      if (!preserveMessage && message) {
+        if (body.users.length === 0) show("No one is enrolled yet.", true);
+        else {
+          message.textContent = "";
+          message.className = "result";
+        }
+      }
+      if (!list) return;
+      list.replaceChildren();
+      for (const person of body.users) {
+        const item = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "person";
+        name.textContent = person.user_id;
+        const time = document.createElement("span");
+        time.className = "when";
+        time.textContent = when(person.created_at);
+        name.append(time);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = buttonClass("danger");
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          try {
+            const deleted = await fetch(`/v1/users/${encodeURIComponent(person.user_id)}`, {
+              method: "DELETE",
+              headers: authHeaders(),
+            });
+            const payload = await readBody(deleted);
+            if (!deleted.ok) show(payload.detail ?? "Delete failed. Check access and try again.");
+            await refresh(!deleted.ok);
+          } catch (error) {
+            show(error instanceof Error ? error.message : "Could not delete this person. Check the API and try again.");
+          }
         });
-        const payload = await deleted.json();
-        if (!deleted.ok) show(payload.detail ?? "Delete failed");
-        await refresh(!deleted.ok);
-      });
-      item.append(name, remove);
-      list.append(item);
+        item.append(name, remove);
+        list.append(item);
+      }
+    } catch (error) {
+      if (list) list.replaceChildren();
+      show(error instanceof Error ? error.message : "Could not reach the API. Check the connection and try again.");
     }
   }
 
-  document.querySelector("#save-token")?.addEventListener("click", () => {
+  saveButton?.addEventListener("click", () => {
     saveToken(tokenInput?.value ?? "");
-    refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "Could not reach the API"));
+    void refresh();
   });
+  refreshButton?.addEventListener("click", () => void refresh());
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const id = userId?.value.trim() ?? "";
-    const response = await fetch(`/v1/users/enroll?user_id=${encodeURIComponent(id)}`, {
-      method: "POST",
-      headers: authHeaders(),
-    });
-    const body = await response.json();
-    show(response.ok ? body.message : (body.detail ?? "Enrolment failed"), response.ok);
-    if (response.ok && userId) userId.value = "";
-    await refresh(true);
+    try {
+      const response = await fetch(`/v1/users/enroll?user_id=${encodeURIComponent(id)}`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const body = await readBody(response);
+      show(response.ok ? body.message : (body.detail ?? "Enrollment failed. Check access and try again."), response.ok);
+      if (response.ok && userId) userId.value = "";
+      await refresh(true);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Could not enroll this person. Check the API and try again.");
+    }
   });
 
-  refresh().catch((error: unknown) => show(error instanceof Error ? error.message : "The API is unreachable."));
+  if (readToken()) void refresh();
 </script>

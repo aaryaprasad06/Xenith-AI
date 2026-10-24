@@ -507,6 +507,26 @@ Run on Ameen's Windows laptop, on the same takes as the SFace and ArcFace runs a
 - The FMR bound is again `1.00e+00`, and every target line is unresolved. Same reason: one person pair. The 0% EER is still "no mistake on these 10 probes."
 - On this dry run AdaFace and ArcFace both separate the two people, and SFace does not. Choosing between AdaFace and ArcFace waits for a second day and more people.
 
+## 2026-10-24 — Console redesign
+
+- Redesigned Preview, Record, People, and Device around a light workspace, teal actions, Public Sans, and dark camera previews. The supplied face-ring reference informed the capture stage. A saved Obys grid screenshot informed the restrained alignment and information hierarchy.
+- The recording ring follows real API ticks and capture states. Running, saving, completion, and failure have distinct treatments. Reduced motion removes animated effects. Setup controls stay locked during active capture, and cancellation and connection recovery give visible feedback.
+- Public Sans is bundled locally through Fontsource under the SIL Open Font License. Intel One Mono remains for small sensor readouts.
+- The production Astro build passed. Playwright checked all four routes at 1440, 834, 390, and 320 CSS pixels with no horizontal overflow or uncaught page errors in the simulated API states. Visually reviewed desktop, tablet, and phone layouts.
+- Browser checks covered required setup, guided start and cancellation, real-tick rendering, saving and completion states, keyboard step selection and retained focus, reduced motion, authentication denial, empty people, enrollment, and device retry. Writes used simulated API responses. No physical camera or door test was performed.
+- Trail was unavailable and `.trail/cache/INDEX.md` was absent, so the context graph could not be read or rebuilt.
+
+## 2026-10-24 — Neutral console refinement
+
+- Replaced the teal palette with neutral graphite, off-white, and gray after visual feedback. Removed the avatar illustration, gradients, glow, and decorative preview glyphs. The capture ring now uses short white progress marks around the actual camera viewport and a small camera placeholder when the feed is absent.
+- Kept real capture progress, state transitions, keyboard selection, and reduced-motion behavior. The production build passed. Playwright checked all four routes at 1440, 834, 390, and 320 CSS pixels without horizontal overflow. Desktop recording and phone preview were visually reviewed. No physical camera test was performed.
+
+## 2026-10-24 — Typography and workspace composition
+
+- Replaced Public Sans with locally bundled Bricolage Grotesque for headings and Instrument Sans for controls and reading. Both packages include SIL Open Font Licenses. Intel One Mono remains for sensor labels. Removed the unused Public Sans package.
+- Kept the navigation and capture ring. Rebuilt Preview as a joined camera and control workspace, with the check action above the instructions and a restrained yellow action color. Directory and hardware views now use indexed sections and a separate dark guidance panel. The device diagram is an illustration, not a live hardware reading.
+- The browser confirmed all three font families loaded. Reviewed desktop Preview and Record, phone People, and tablet Device. All four routes fit at 1440, 834, 390, and 320 CSS pixels without horizontal overflow. The main liveness action fits within a 1440 by 700 viewport. Simulated denial, keyboard step selection, and reduced motion still work, with no uncaught page errors during those checks. Physical camera behavior was not retested.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the laptop, the config value, and the pass/fail result in the entry. Name the laptop when it is not the Linux one. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

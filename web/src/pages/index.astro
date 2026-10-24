@@ -4,20 +4,32 @@ import Base from "../layouts/Base.astro";
 ---
 
 <Base title="Face-ID" current="preview">
-  <div class="hero">
-    <h1>The face in this frame</h1>
-    <Button id="auth" type="button">Authenticate</Button>
+  <div class="page-heading">
+    <div><p class="eyebrow">00 / AUTHENTICATION</p><h1>Face authentication.</h1><p>Start with a live face. Infrared and depth do the checking.</p></div>
+    <a class="text-link" href="/record">Set up a recording <span aria-hidden="true">↗</span></a>
   </div>
-  <img
+  <div class="preview-layout">
+  <section class="preview-camera" aria-label="Live camera preview">
+    <div class="camera-toolbar"><span><span class="status-dot"></span> Camera workspace</span><span>D435 <span class="toolbar-divider">/</span> INFRARED</span></div>
+    <div class="preview-viewport">
+    <div class="preview-placeholder" id="preview-placeholder"><div class="alignment-guide" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="guide-cross">+</span></div><p id="camera-message">Connecting to your camera</p><span>Your infrared preview will appear here.</span></div>
+    <img
     class="stream"
     src="/v1/preview/stream"
     alt="Live infrared from the depth camera"
   />
-  <p class="note">
-    Depth decides whether it is a person, so a flat photo should fail.
-    <span id="health"></span>
-  </p>
-  <p id="result" class="result" role="status"></p>
+    </div>
+    <div class="camera-caption"><span id="health" role="status">Checking camera connection…</span><a href="/device">Device details ↗</a></div>
+  </section>
+  <aside class="auth-panel panel">
+    <div class="console-label"><span class="eyebrow">VERIFY / 01</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 24 24 8M8 8h16v16" stroke="currentColor" stroke-width="1.5"/></svg></div><h2>Confirm a<br />live face.</h2><p class="note">A depth check helps distinguish a live face from a flat photo.</p>
+    <Button id="auth" type="button">Run liveness check <span aria-hidden="true">↗</span></Button>
+    <p id="result" class="result" role="status"></p>
+    <ol class="instructions"><li><span>01</span><div><strong>Face the camera</strong><p>Keep your whole face within the preview.</p></div></li><li><span>02</span><div><strong>Stay close, hold still</strong><p>Use a dark background, 10–60 cm away.</p></div></li><li><span>03</span><div><strong>Run the check</strong><p>Review the result before trying again.</p></div></li></ol>
+    <div class="development-note"><span class="small-label">CURRENT CAPABILITY</span><strong>Liveness only. Door stays locked.</strong><p>Identity matching is still in development.</p></div>
+  </aside>
+  </div>
+  <div class="workspace-links" aria-label="Explore the workspace"><a href="/record"><span class="small-label">01 / CAPTURE</span><strong>Build a face dataset</strong><span class="workspace-arrow" aria-hidden="true">↗</span><span>Guided poses. Real depth.</span></a><a href="/users"><span class="small-label">02 / DIRECTORY</span><strong>Manage people</strong><span class="workspace-arrow" aria-hidden="true">↗</span><span>Enrollment starts with an ID.</span></a><a href="/device"><span class="small-label">03 / HARDWARE</span><strong>Know your device</strong><span class="workspace-arrow" aria-hidden="true">↗</span><span>Connection and camera details.</span></a></div>
 </Base>
 
 <script>
@@ -29,6 +41,8 @@ import Base from "../layouts/Base.astro";
   function holdFrame(): void {
     if (!stream || stream.dataset.fallback === "1") return;
     stream.dataset.fallback = "1";
+    stream.style.opacity = "0";
+    document.querySelector("#preview-placeholder")?.removeAttribute("hidden");
     stream.src =
       "data:image/svg+xml;charset=utf-8," +
       encodeURIComponent(
@@ -37,6 +51,9 @@ import Base from "../layouts/Base.astro";
   }
 
   stream?.addEventListener("error", holdFrame);
+  stream?.addEventListener("load", () => {
+    if (stream.dataset.fallback !== "1") document.querySelector("#preview-placeholder")?.setAttribute("hidden", "");
+  });
   if (stream?.complete && stream.naturalWidth === 0) holdFrame();
 
   const cameraLine: Record<string, string> = {
@@ -53,16 +70,20 @@ import Base from "../layouts/Base.astro";
       const line = cameraLine[body.camera] ?? "The camera is not connected.";
       health.textContent = ` ${line}`;
       health.className = body.camera === "streaming" || body.camera === "starting" ? "" : "bad";
+      const cameraMessage = document.querySelector("#camera-message");
+      if (cameraMessage) cameraMessage.textContent = body.camera === "streaming" ? "Waiting for the live preview" : body.camera === "starting" ? "Starting your camera" : "Camera unavailable";
     }
   }
 
   auth?.addEventListener("click", async () => {
     if (!result || !auth) return;
     auth.disabled = true;
+    auth.setAttribute("aria-busy", "true");
     result.className = "result";
     result.textContent = "Checking depth.";
     try {
       const response = await fetch("/v1/auth", { method: "POST" });
+      if (!response.ok) throw new Error("The check could not finish. Check the camera connection and try again.");
       const body = await response.json();
       const raw = typeof body.reason === "string" ? body.reason : "";
       const reason = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
@@ -74,12 +95,16 @@ import Base from "../layouts/Base.astro";
       result.textContent = error instanceof Error ? error.message : "The check did not finish.";
     } finally {
       auth.disabled = false;
+      auth.removeAttribute("aria-busy");
     }
   });
 
   refreshHealth().catch((error: unknown) => {
     if (health) {
-      health.textContent = ` ${error instanceof Error ? error.message : "The API is unreachable."}`;
+      health.textContent = "Connection unavailable. Check that the API is running.";
+      health.className = "bad";
+      const cameraMessage = document.querySelector("#camera-message");
+      if (cameraMessage) cameraMessage.textContent = "Camera unavailable";
     }
   });
 </script>

@@ -1,19 +1,45 @@
 ---
+import Button from "../components/Button.astro";
 import Base from "../layouts/Base.astro";
 ---
 
 <Base title="Device — Face-ID" current="device">
-  <div class="stack">
-    <h1 id="title">On the bus</h1>
-    <p id="status" class="note"></p>
-    <dl id="info"></dl>
+  <section class="page-heading">
+    <p class="eyebrow">03 / HARDWARE</p>
+    <h1>Inside the system.</h1>
+    <p>Connection and identification details reported by the camera service.</p>
+  </section>
+
+  <div class="management-grid">
+    <section class="panel" aria-labelledby="device-panel-heading">
+      <p class="eyebrow">Connected hardware</p>
+      <h2 id="device-panel-heading">Camera information</h2>
+      <svg class="hardware-illustration" viewBox="0 0 500 160" role="img" aria-label="Illustration of an Intel RealSense D435 camera, shown from the front">
+        <rect x="42" y="44" width="416" height="72" rx="28" fill="none" stroke="currentColor" stroke-width="3" />
+        <circle cx="126" cy="80" r="17" fill="none" stroke="currentColor" stroke-width="3" />
+        <circle cx="374" cy="80" r="17" fill="none" stroke="currentColor" stroke-width="3" />
+        <circle cx="250" cy="80" r="8" fill="currentColor" />
+      </svg>
+      <h2 id="title">Device details</h2>
+      <p id="status" class="note" role="status" aria-live="polite">Loading device information…</p>
+      <dl id="info"></dl>
+      <Button id="retry-device" variant="quiet" type="button">Retry connection</Button>
+    </section>
+    <aside class="help-panel">
+      <p class="eyebrow">ACCESS</p>
+      <h2>Bring the camera into view.</h2>
+      <p>This page shows details returned by the API. If the camera is unavailable, check its connection and that the API is running, then retry.</p>
+      <p>When the device is ready, continue to the recording workflow to collect consented enrollment data.</p>
+      <a href="/record">Go to recording</a>
+    </aside>
   </div>
 </Base>
 
 <script>
-  const title = document.querySelector("#title");
-  const status = document.querySelector("#status");
-  const info = document.querySelector("#info");
+  const title = document.querySelector<HTMLElement>("#title");
+  const status = document.querySelector<HTMLElement>("#status");
+  const info = document.querySelector<HTMLDListElement>("#info");
+  const retry = document.querySelector<HTMLButtonElement>("#retry-device");
 
   function row(label: string, value: string): void {
     if (!info) return;
@@ -24,20 +50,41 @@ import Base from "../layouts/Base.astro";
     info.append(term, data);
   }
 
-  const response = await fetch("/v1/device/info");
-  const body = await response.json();
-  if (!response.ok) {
-    if (title) title.textContent = "No camera on the bus";
+  async function loadDevice(): Promise<void> {
     if (status) {
-      const detail = String(body.detail ?? "The camera is not connected.");
-      status.textContent = detail.charAt(0).toUpperCase() + detail.slice(1);
-      status.className = "note bad";
+      status.textContent = "Loading device information…";
+      status.className = "note";
     }
-  } else if (title && info) {
-    title.textContent = body.name;
-    if (status) status.textContent = "";
-    row("Serial", body.serial);
-    row("Firmware", body.firmware);
-    if (body.product_line) row("Product", body.product_line);
+    if (info) info.replaceChildren();
+    try {
+      const response = await fetch("/v1/device/info");
+      let body: any;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error("The server returned an unreadable response. Check the API and try again.");
+      }
+      if (!response.ok) {
+        const detail = String(body.detail ?? "The camera is not connected.");
+        if (status) {
+          status.textContent = `${detail.charAt(0).toUpperCase()}${detail.slice(1)} Check the camera connection, then retry.`;
+          status.className = "note bad";
+        }
+        return;
+      }
+      if (title) title.textContent = body.name;
+      if (status) status.textContent = "Device information loaded.";
+      row("Serial", body.serial);
+      row("Firmware", body.firmware);
+      if (body.product_line) row("Product", body.product_line);
+    } catch (error) {
+      if (status) {
+        status.textContent = `${error instanceof Error ? error.message : "Could not reach the API."} Check the connection and retry.`;
+        status.className = "note bad";
+      }
+    }
   }
+
+  retry?.addEventListener("click", () => void loadDevice());
+  void loadDevice();
 </script>

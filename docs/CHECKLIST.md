@@ -95,6 +95,7 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 - [x] FastAPI app in `api/` (RealSenseID-REST shape: `/v1/auth`, `/v1/users`, `/v1/preview`, `/v1/device`), plus PRD aliases `POST /authenticate`, `GET /health`, `POST /admin/enroll`, `DELETE /admin/person/{id}`
 - [x] Admin token on enrol and delete (`FACE_ID_ADMIN_TOKEN`)
 - [x] Astro console in `web/` (pnpm): preview, people, device
+- [x] Redesign all four console views with responsive forms, accessible navigation, and state-driven guided capture animation with reduced-motion support
 - [ ] `logging_/access_log.py`: SQLite `access_events`, log every attempt including spoofs
 - [x] Add fastapi, uvicorn
 - [ ] Unit tests: state-machine transitions

@@ -102,6 +102,13 @@ The first time, install the console packages: `cd web && pnpm install`.
 
 The console proxies `/v1`, `/health`, `/authenticate`, and `/admin` to the API.
 
+The console pairs Bricolage Grotesque headings with Instrument Sans controls,
+graphite camera previews, and a yellow primary check action. Guided recording
+has an animated face ring driven by capture state and
+actual progress. It supports reduced motion, keyboard step selection, camera
+fallbacks, and responsive setup forms. Identity matching and door control remain
+unavailable.
+
 | Page | What it calls |
 | --- | --- |
 | Preview | `GET /v1/preview/stream` (MJPEG of the left IR image), `POST /v1/auth` |
