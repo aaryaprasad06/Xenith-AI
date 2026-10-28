@@ -3,7 +3,7 @@
 Tracks the build against [PRD.md](PRD.md). Tick items as they are done.
 
 **Platform:** current x86_64 Linux machine. Raspberry Pi work is deferred.
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-28
 
 Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
@@ -14,9 +14,9 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 | 1. Environment + capture | Implemented; tape check passed (not on white, not past 100 cm) |
 | 2. Pi build | Deferred |
 | 3. Detect + align + quality gate | Detect, align, and most quality checks are in. A real face is found, including under 30 cm. Blur check is built but off: Laplacian variance did not separate blur on this camera |
-| 4. Baseline identity | To do |
+| 4. Baseline identity | Embedders and 1:N matcher implemented; live matching and threshold calibration pending |
 | 5. Geometry liveness | Live check passed on a real face (2026-10-06). A printed photo and a phone screen were rejected (2026-10-18). Thresholds are still the starting values |
-| 6. Door control | API shell started (no state machine, relay, or log yet) |
+| 6. Door control | API, state machine, mock relay and access log implemented; live end-to-end rehearsal pending |
 | 7. Attack dataset + learned liveness + fusion | To do |
 | 8. Improve identity | To do |
 | 9. Evaluation + threshold tuning | To do |
@@ -69,10 +69,12 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 - [x] Download SFace model; record it in `docs/CITATIONS.md` (fetched by `python -m face.models`, sha256-pinned, not in git)
 - [x] `face/embed.py`: SFace on aligned IR crop, 128-D, L2-normalised. Also ArcFace R50 (buffalo_l), 512-D (2026-10-18), and AdaFace IR-101 (WebFace12M), 512-D, exported to ONNX (2026-10-19)
+- [x] AdaFace export rejects non-finite validation output and preserves the existing model on failure; regression tests added (2026-10-28)
 - [ ] Pick the model from `eval.far_frr` once 2+ people are recorded
-- [ ] `face/match.py`: gallery matrix, `scores = gallery @ query`, threshold, `unknown`
-- [ ] Unit tests with known embeddings
-- [ ] **Check:** correct match for enrolled people, `unknown` for strangers
+- [x] `face/match.py`: gallery matrix, `scores = gallery @ query`, threshold, `unknown` (2026-10-22). Threshold is still the 0.45 starting value
+- [x] Unit tests with known embeddings
+- [x] Enroll a saved session from Record into the matching gallery, preserving other identities and updating People (2026-10-28)
+- [ ] **Check:** correct match for enrolled people, `unknown` for strangers. Live p001 granted on Linux 2026-10-28 (ArcFace 0.7235, 8/8 agreeing); stranger test still pending
 
 ## Step 5: Geometry liveness
 
@@ -87,27 +89,29 @@ Legend: `[x]` done, `[ ]` to do, `[~]` deferred (Pi, out of scope for now).
 
 ## Step 6: Door control
 
-- [ ] `control/state_machine.py`: IDLE → FACE_DETECTED → QUALITY_OK → LIVENESS_PASS → MATCHED → UNLOCKED → COOLDOWN, plus DENIED
-- [ ] Multi-frame decision (5-10 frames) with agreement
-- [ ] `control/relay.py`: relay interface + **mock relay** (logs lock/unlock) for the dev machine
-- [ ] Auto re-lock after `unlock_seconds`
-- [ ] Lockout after `max_failures`, cooldown `cooldown_seconds`
+- [x] `control/state_machine.py`: IDLE → FACE_DETECTED → QUALITY_OK → LIVENESS_PASS → MATCHED → UNLOCKED, plus DENIED; COOLDOWN is the lockout (2026-10-22)
+- [x] Multi-frame decision (5-10 frames) with agreement: 5 laser-on frames for liveness, 3+ laser-off faces for identity with 60% agreeing
+- [x] `control/relay.py`: relay interface + **mock relay** (logs lock/unlock) for the dev machine
+- [x] Auto re-lock after `unlock_seconds`
+- [x] Lockout after `max_failures`, cooldown `cooldown_seconds`; disabled for development with `max_failures: 0` (2026-10-28)
 - [x] FastAPI app in `api/` (RealSenseID-REST shape: `/v1/auth`, `/v1/users`, `/v1/preview`, `/v1/device`), plus PRD aliases `POST /authenticate`, `GET /health`, `POST /admin/enroll`, `DELETE /admin/person/{id}`
 - [x] Admin token on enrol and delete (`FACE_ID_ADMIN_TOKEN`)
 - [x] Astro console in `web/` (pnpm): preview, people, device
 - [x] Redesign all four console views with responsive forms, accessible navigation, and state-driven guided capture animation with reduced-motion support
-- [ ] `logging_/access_log.py`: SQLite `access_events`, log every attempt including spoofs
+- [x] `logging_/access_log.py`: SQLite `access_events`, log every attempt including spoofs; `GET /v1/auth/log`
 - [x] Add fastapi, uvicorn
-- [ ] Unit tests: state-machine transitions
-- [ ] **Check:** end-to-end unlock for a live enrolled person; denied for a spoof
+- [x] Unit tests: state-machine transitions
+- [ ] **Check:** end-to-end unlock for a live enrolled person; denied for a spoof. Live unlock and subsequent locked state confirmed 2026-10-28 on Linux; live end-to-end spoof rehearsal pending
 - [~] Real GPIO relay on the Pi (`RPi.GPIO`, 12 V strike, fail-secure NO/COM)
 
 ## Enrolment (needed for steps 4 and 6)
 
+- [x] Stand-in: `enroll/from_takes.py` builds the gallery from recorded takes (unencrypted `data/gallery.npz`) until `enroll.py` exists
 - [ ] `enroll/consent_form.md` and consent recording
 - [ ] `enroll/enroll.py`: capture 10-20 frames that pass quality gate and liveness
 - [ ] `enroll/store.py`: embeddings only, encrypted at rest (Fernet or SQLCipher)
 - [ ] Admin commands: `enroll`, `list`, `update`, `delete` (delete removes embeddings and metadata)
+- [x] People lists directory IDs and gallery identities with face-enrolment status; Delete revokes gallery access and removes metadata (2026-10-28). Live face enrolment and update still pending
 - [ ] Add cryptography
 
 ## Step 7: Attack dataset + learned liveness + fusion

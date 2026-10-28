@@ -15,10 +15,11 @@ from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import Settings, load_settings
-from api.deps import get_camera, get_users, require_admin
+from api.deps import get_camera, get_door, get_users, require_admin
 from api.routers.v1 import auth, device, preview, recordings, users
 from api.schemas import AuthResponse, DeleteResponse, EnrollResponse, HealthResponse
 from api.services.camera import CameraHub
+from api.services.door import DoorService
 from api.services.guided import GuidedRecorder
 from api.services.users import UserStore
 
@@ -36,10 +37,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             config_path=str(settings.config_path) if settings.config_path else None,
         )
         application.state.camera.start()
-        application.state.guided = GuidedRecorder(application.state.camera, settings.raw_root)
+        application.state.door = DoorService(
+            config_path=settings.config_path,
+            gallery_path=settings.gallery_path,
+            access_log_path=settings.access_log_path,
+        )
+        application.state.door.start()
+        application.state.guided = GuidedRecorder(
+            application.state.camera, settings.raw_root
+        )
         log.info("camera state: %s", application.state.camera.camera_state)
         yield
         application.state.guided.cancel()
+        application.state.door.stop()
         application.state.camera.stop()
 
     app = FastAPI(
@@ -64,8 +74,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # PRD names, same handlers as the /v1 routers.
     @app.post("/authenticate", tags=["auth"])
-    def authenticate_alias(camera: Annotated[CameraHub, Depends(get_camera)]) -> AuthResponse:
-        return auth.authenticate(camera)
+    def authenticate_alias(
+        camera: Annotated[CameraHub, Depends(get_camera)],
+        door: Annotated[DoorService, Depends(get_door)],
+    ) -> AuthResponse:
+        return auth.authenticate(camera, door)
 
     @app.post(
         "/admin/enroll",
@@ -76,8 +89,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def enroll_alias(
         users_store: Annotated[UserStore, Depends(get_users)],
         user_id: Annotated[str, Query(min_length=1, max_length=100)],
+        door: Annotated[DoorService, Depends(get_door)],
     ) -> EnrollResponse:
-        return users.enroll(users_store, user_id)
+        return users.enroll(users_store, user_id, door)
 
     @app.delete(
         "/admin/person/{user_id}",
@@ -87,8 +101,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def delete_alias(
         user_id: str,
         users_store: Annotated[UserStore, Depends(get_users)],
+        door: Annotated[DoorService, Depends(get_door)],
     ) -> DeleteResponse:
-        return users.delete_user(user_id, users_store)
+        return users.delete_user(user_id, users_store, door)
 
     prefix = settings.api_v1_prefix
     app.include_router(auth.router, prefix=prefix)

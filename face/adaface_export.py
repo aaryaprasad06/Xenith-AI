@@ -107,7 +107,10 @@ def export(weights: Path, out: Path) -> float:
         with torch.no_grad():
             expected = net(x).numpy()
         check.setInput(x.numpy())
-        worst = max(worst, float(np.abs(check.forward() - expected).max()))
+        actual = check.forward()
+        if not np.isfinite(expected).all() or not np.isfinite(actual).all():
+            raise ValueError("OpenCV or PyTorch output contains non-finite values")
+        worst = max(worst, float(np.abs(actual - expected).max()))
     return worst
 
 
@@ -120,13 +123,15 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     tmp = args.out.with_suffix(".tmp.onnx")
-    worst = export(model_file("adaface_ir101_weights"), tmp)
-    if worst > 1e-3:
-        tmp.unlink()
-        raise SystemExit(
-            f"OpenCV output differs from PyTorch by {worst:.2e}; export not kept"
-        )
-    tmp.replace(args.out)
+    try:
+        worst = export(model_file("adaface_ir101_weights"), tmp)
+        if not np.isfinite(worst) or worst > 1e-3:
+            raise SystemExit(
+                f"OpenCV output differs from PyTorch by {worst:.2e}; export not kept"
+            )
+        tmp.replace(args.out)
+    finally:
+        tmp.unlink(missing_ok=True)
     print(f"{args.out} (largest difference from PyTorch {worst:.2e})")
 
 

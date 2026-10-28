@@ -29,6 +29,9 @@ class LivenessDecision:
     reason: str
     relief_m: float | None
     nose_cheek_m: float | None
+    # The face was measured and is the wrong shape. Other rejections (two faces,
+    # motion, the quality gate) say nothing about a spoof.
+    shape_failed: bool = False
 
     @property
     def live(self) -> bool:
@@ -118,6 +121,7 @@ def judge_window(
                 reason=report.reason,
                 relief_m=report.relief_m,
                 nose_cheek_m=report.nose_cheek_m,
+                shape_failed=report.shape_failed,
             )
 
     last = reports[-1]
@@ -128,8 +132,7 @@ def judge_window(
         reason=(
             f"{required} laser-on frames show a face shape "
             f"(relief {relief * 100:.1f} cm, nose-to-cheek {gap * 100:.1f} cm), "
-            "and the laser turned off during the check. "
-            "Identity matching is not built, so the door stays locked."
+            "and the laser turned off during the check"
         ),
         relief_m=last.relief_m,
         nose_cheek_m=last.nose_cheek_m,

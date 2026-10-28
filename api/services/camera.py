@@ -1,7 +1,7 @@
 """One D435 pipeline shared by the preview stream, authentication and recording.
 
 Mirrors the RealSenseID-REST idea of a single device wrapper behind the routers.
-Face matching is not in this wrapper yet.
+Matching and the door live in `api/services/door.py`, which reads frames from here.
 """
 
 from __future__ import annotations
@@ -47,6 +47,7 @@ class CameraHub:
         self.info: DeviceInfo | None = None
         self.error: str | None = None
         self._jpeg: bytes | None = None
+        self._rgb_jpeg: bytes | None = None
         self._recent: deque[Frame] = deque(maxlen=16)
         # A take in progress: the stream thread appends here until `_take_count`.
         self._take: list[Frame] | None = None
@@ -77,7 +78,9 @@ class CameraHub:
             self.error = str(exc)
             log.warning("camera unavailable: %s", exc)
             return
-        self._thread = threading.Thread(target=self._run, name="d435-preview", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name="d435-preview", daemon=True
+        )
         self._thread.start()
 
     def stop(self) -> None:
@@ -86,9 +89,9 @@ class CameraHub:
             self._thread.join(timeout=6)
             self._thread = None
 
-    def latest_jpeg(self) -> bytes | None:
+    def latest_jpeg(self, channel: Literal["ir", "rgb"] = "ir") -> bytes | None:
         with self._lock:
-            return self._jpeg
+            return self._rgb_jpeg if channel == "rgb" else self._jpeg
 
     def recent_frames(self) -> list[Frame]:
         """Newest frames, oldest first. Includes both laser-on and laser-off."""
@@ -113,7 +116,9 @@ class CameraHub:
         with self._lock:
             frames, self._take = self._take, None
         if not done:
-            raise TimeoutError(f"got {len(frames)} of {count} frames in {timeout_s:.0f} s")
+            raise TimeoutError(
+                f"got {len(frames)} of {count} frames in {timeout_s:.0f} s"
+            )
         return frames
 
     def add_listener(self, listener: Callable[[Frame], None]) -> None:
@@ -125,10 +130,12 @@ class CameraHub:
             if listener in self._listeners:
                 self._listeners.remove(listener)
 
-    def _push(self, frame: Frame, jpeg: bytes) -> None:
+    def _push(self, frame: Frame, jpeg: bytes, rgb_jpeg: bytes | None = None) -> None:
         with self._lock:
             listeners = list(self._listeners)
             self._jpeg = jpeg
+            if rgb_jpeg is not None:
+                self._rgb_jpeg = rgb_jpeg
             self._recent.append(frame)
             if self._take is not None and len(self._take) < self._take_count:
                 self._take.append(frame)
@@ -149,7 +156,16 @@ class CameraHub:
                     )
                     if not ok:
                         continue
-                    self._push(frame, encoded.tobytes())
+                    rgb_jpeg = None
+                    # RGB is aligned through depth. Laser-on frames have reliable
+                    # depth, so using them avoids a flickering colour preview.
+                    if frame.rgb is not None and frame.emitter_state == "on":
+                        rgb_ok, rgb_encoded = cv2.imencode(
+                            ".jpg", frame.rgb, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+                        )
+                        if rgb_ok:
+                            rgb_jpeg = rgb_encoded.tobytes()
+                    self._push(frame, encoded.tobytes(), rgb_jpeg)
         except (RuntimeError, OSError) as exc:
             self.error = str(exc)
             log.exception("preview stream stopped")

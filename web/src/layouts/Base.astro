@@ -6,7 +6,7 @@ import "../styles/global.css";
 
 interface Props {
   title: string;
-  current: "preview" | "record" | "users" | "device";
+  current: "preview" | "record" | "research" | "users" | "device";
 }
 
 const { title, current } = Astro.props;
@@ -33,6 +33,6 @@ const { title, current } = Astro.props;
     <main id="main">
       <slot />
     </main>
-    <footer class="site-footer"><span>Face-ID <span class="footer-divider">/</span> Intel RealSense D435</span><span>IR + depth sensing <span class="footer-divider">·</span> Local processing</span></footer>
+    <footer class="site-footer"><span>Face-ID <span class="footer-divider">/</span> Intel RealSense D435</span><span>IR + depth sensing <span class="footer-divider">·</span> Local processing <span class="footer-divider">·</span> <a href="/record-research" aria-current={current === "research" ? "page" : undefined}>Research tools</a></span></footer>
   </body>
 </html>

@@ -19,7 +19,8 @@ class DeviceInfo(BaseModel):
 
 class UserRecord(BaseModel):
     user_id: str
-    created_at: str
+    created_at: str | None = None
+    face_enrolled: bool = False
 
 
 class UsersResponse(BaseModel):
@@ -37,19 +38,64 @@ class DeleteResponse(BaseModel):
     user_id: str
 
 
+class EnrollTakesRequest(BaseModel):
+    session: str
+    consent: bool = False
+
+
+class EnrollTakesResponse(BaseModel):
+    user_id: str
+    face_enrolled: bool = True
+    takes_used: int
+
+
 class AuthResponse(BaseModel):
+    # How far the attempt got. `no_gallery`, `no_match` and `matched` all passed liveness.
     status: Literal[
         "camera_unavailable",
+        "locked_out",
         "no_frame",
         "no_face",
         "rejected",
-        "live",
+        "no_gallery",
+        "no_match",
+        "matched",
     ]
+    decision: Literal["granted", "denied"] = "denied"
+    # Only set when granted, so a denied caller learns nothing about who is enrolled.
     user_id: str | None = None
-    decision: Literal["denied"] = "denied"
     reason: str
+    state: str = "idle"
+    failures: int = 0
     relief_m: float | None = None
     nose_cheek_m: float | None = None
+    match_score: float | None = None
+
+
+class DoorStateResponse(BaseModel):
+    state: str
+    locked: bool
+    failures: int
+    mock_relay: bool
+
+
+class AccessEventRecord(BaseModel):
+    id: int
+    ts: str
+    decision: str
+    status: str
+    reason: str
+    state: str
+    path: str
+    liveness_geom: float | None
+    liveness_model: float | None
+    match_score: float | None
+    person_id: str | None
+    latency_ms: float
+
+
+class AccessLogResponse(BaseModel):
+    events: list[AccessEventRecord]
 
 
 class RecordingOptions(BaseModel):

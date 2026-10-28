@@ -5,9 +5,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from eval.far_frr import EMBEDDERS
 from face import models
-from face.embed import AdaFaceEmbedder, ArcFaceEmbedder, RawPixelEmbedder, SFaceEmbedder
+from face.embed import (
+    EMBEDDERS,
+    AdaFaceEmbedder,
+    ArcFaceEmbedder,
+    RawPixelEmbedder,
+    SFaceEmbedder,
+)
 from face.models import MODELS, ModelFile, fetch, model_file, sha256_of
 
 

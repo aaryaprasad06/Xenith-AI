@@ -34,6 +34,9 @@ class GeometryReport:
     nose_cheek_m: float | None
     hole_frac: float
     distance_m: float | None
+    # True only when the face was measured and its shape is wrong (a likely
+    # spoof), not when the quality gate or missing depth stopped the check.
+    shape_failed: bool = False
 
 
 def deproject(
@@ -252,4 +255,5 @@ def check_geometry(
         nose_cheek_m=gap,
         hole_frac=gate.hole_frac,
         distance_m=gate.distance_m,
+        shape_failed=True,
     )

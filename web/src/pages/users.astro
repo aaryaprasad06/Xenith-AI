@@ -7,7 +7,7 @@ import Base from "../layouts/Base.astro";
   <section class="page-heading">
     <p class="eyebrow">02 / DIRECTORY</p>
     <h1>People &amp; access</h1>
-    <p>Manage enrolled user IDs. Enrollment records an ID only; face matching is not available yet, so authentication remains denied.</p>
+    <p>View people and their face-access status. Faces enrolled from your recordings appear here too.</p>
   </section>
 
   <div class="management-grid">
@@ -24,19 +24,19 @@ import Base from "../layouts/Base.astro";
 
       <section aria-labelledby="enroll-heading">
         <p class="sheet-index">02</p>
-        <h2 id="enroll-heading">Enroll a person</h2>
-        <p>Use a unique user ID. This does not enable face matching or unlock the door.</p>
+        <h2 id="enroll-heading">Add a person ID</h2>
+        <p>Reserve a unique ID, then record consented face samples and click “Enroll face from this session” on the recording page. Adding an ID alone does not enroll a face.</p>
         <form id="enroll" class="enroll">
           <label for="user-id">User ID</label>
           <input id="user-id" type="text" placeholder="e.g. p001" required maxlength="100" autocomplete="off" />
-          <Button type="submit">Enroll</Button>
+          <Button type="submit">Add ID</Button>
         </form>
       </section>
 
       <section aria-labelledby="people-heading">
         <p class="sheet-index">03</p>
         <div class="section-heading">
-          <h2 id="people-heading">Enrolled people</h2>
+          <h2 id="people-heading">People and face access</h2>
           <Button id="refresh-people" variant="quiet" type="button">Refresh list</Button>
         </div>
         <ul id="people" class="people"></ul>
@@ -46,7 +46,7 @@ import Base from "../layouts/Base.astro";
     <aside class="help-panel">
       <p class="eyebrow">NEXT STEP</p>
       <h2>Identity starts here.</h2>
-      <p>People are currently represented by user IDs only. Capture consented enrollment data on the recording page; matching is not available yet.</p>
+      <p>People marked “Face enrolled” can be matched during authentication. Delete removes their ID and revokes face access. Saved recordings remain available until removed on the recording page.</p>
       <a href="/record">Go to recording</a>
       <p>To manage this directory, set <code>FACE_ID_ADMIN_TOKEN</code> for the API, enter it above, and save it. The token stays in this browser and is sent with protected people requests.</p>
     </aside>
@@ -104,7 +104,7 @@ import Base from "../layouts/Base.astro";
         return;
       }
       if (!preserveMessage && message) {
-        if (body.users.length === 0) show("No one is enrolled yet.", true);
+        if (body.users.length === 0) show("No people or enrolled faces yet. Add an ID or record face samples to get started.", true);
         else {
           message.textContent = "";
           message.className = "result";
@@ -119,23 +119,26 @@ import Base from "../layouts/Base.astro";
         name.textContent = person.user_id;
         const time = document.createElement("span");
         time.className = "when";
-        time.textContent = when(person.created_at);
+        time.textContent = `${person.face_enrolled ? "Face enrolled" : "ID only · face not enrolled"}${person.created_at ? ` · ${when(person.created_at)}` : " · from recorded samples"}`;
         name.append(time);
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = buttonClass("danger");
         remove.textContent = "Delete";
         remove.addEventListener("click", async () => {
+          remove.disabled = true;
           try {
             const deleted = await fetch(`/v1/users/${encodeURIComponent(person.user_id)}`, {
               method: "DELETE",
               headers: authHeaders(),
             });
             const payload = await readBody(deleted);
-            if (!deleted.ok) show(payload.detail ?? "Delete failed. Check access and try again.");
-            await refresh(!deleted.ok);
+            show(deleted.ok ? `Deleted ${person.user_id}. Face access removed; saved recordings remain.` : (payload.detail ?? "Delete failed. Check access and try again."), deleted.ok);
+            await refresh(true);
           } catch (error) {
             show(error instanceof Error ? error.message : "Could not delete this person. Check the API and try again.");
+          } finally {
+            remove.disabled = false;
           }
         });
         item.append(name, remove);

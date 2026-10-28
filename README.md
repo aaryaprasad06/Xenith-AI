@@ -13,9 +13,9 @@ Pi 4 the PRD names. Pi-specific work is deferred; see the status table.
 | 1. Environment + capture | Done: live aligned IR + depth, filter chain, emitter tagging |
 | 2. Pi build | Deferred: running on this machine for now |
 | 3. Detect + align + quality gate | YuNet, 112×112 align, and the quality checks except blur |
-| 4. Baseline identity (embed + match) | Not started |
+| 4. Baseline identity (embed + match) | SFace, ArcFace R50 and AdaFace embedders, and 1:N matching. Model not chosen; threshold not tuned |
 | 5. Geometry liveness | Depth shape gate is in. A printed photo and a phone screen are rejected |
-| 6. Door control (API, relay, state machine, log) | API and console are in. No state machine, relay, or log |
+| 6. Door control (API, relay, state machine, log) | API, console, state machine, mock relay, lockout and access log are in. Not yet checked end to end on the camera |
 | 7-10. Learned liveness, tuning, evaluation, hardening | Not started (Pi-specific parts of step 10 deferred) |
 
 The full task-by-task list is in [docs/CHECKLIST.md](docs/CHECKLIST.md).
@@ -76,10 +76,8 @@ relief is at least 1.5 cm and the nose is closer than the cheeks. Those
 numbers are the starting thresholds in `configs/default.yaml`, not yet tuned
 on this camera.
 
-`live` does not unlock the door. Identity matching is not built.
-
-The same check runs when the console's Authenticate button calls `POST /v1/auth`.
-The decision is still `denied`, so a live stranger cannot open the door.
+A live face is then matched against the gallery (below). Only a live,
+enrolled face unlocks the door.
 
 Stand between 0.10 m and 0.60 m, on a black or green wall. A white wall has no
 depth, so the check says the face has no depth.
@@ -106,17 +104,38 @@ The console pairs Bricolage Grotesque headings with Instrument Sans controls,
 graphite camera previews, and a yellow primary check action. Guided recording
 has an animated face ring driven by capture state and
 actual progress. It supports reduced motion, keyboard step selection, camera
-fallbacks, and responsive setup forms. Identity matching and door control remain
-unavailable.
+fallbacks, and responsive setup forms. Authentication checks liveness and the
+face gallery before controlling the mock relay; no physical door is connected.
 
 | Page | What it calls |
 | --- | --- |
-| Preview | `GET /v1/preview/stream` (MJPEG of the left IR image), `POST /v1/auth` |
+| Preview | `GET /v1/preview/stream` (MJPEG of the left IR image), `POST /v1/auth`, `GET /v1/auth/state` (mock door lock/unlock) |
 | Record | Guided capture: `POST/GET/DELETE /v1/recordings/guided` (head-turn circle, dark, print, screen), and `GET/POST/DELETE /v1/recordings` for single takes. Admin token. Saves the same takes as `capture.recorder` to `data/raw/` (`FACE_ID_RAW`) |
-| People | `GET/POST/DELETE /v1/users` with `Authorization: Bearer <token>` |
+| People | `GET /v1/users` lists IDs and gallery faces, `POST /v1/users/enroll` adds an ID, `DELETE /v1/users/{id}` removes the ID and face access. Admin token. |
 | Device | `GET /v1/device/info` |
 
-`POST /authenticate`, `POST /admin/enroll`, and `DELETE /admin/person/{id}` are the same operations under the names in the PRD. Enrolment stores the id only. Authenticate runs the geometry liveness check and still returns `denied`, because embeddings are not built yet. A flat scene comes back `rejected`. A face that passes the depth shape comes back `live`, with the door still locked.
+`POST /authenticate`, `POST /admin/enroll`, and `DELETE /admin/person/{id}` are the same operations under the names in the PRD. Enrolment through the API still stores the id only.
+
+People shows both directory IDs and identities in the matching gallery, with
+`Face enrolled` or `ID only` status. Delete revokes gallery access as well as
+removing metadata. It leaves recorded takes intact; explicitly rebuilding the
+gallery from those takes can enroll that person again.
+
+### Door decision
+
+`POST /v1/auth` runs geometry liveness on the recent laser-on frames. Only a live window goes on to matching, on the laser-off frames. A match unlocks the mock relay, which logs `UNLOCK`. It locks again after `door.unlock_seconds`. The answer has `decision` (`granted` / `denied`), `status` (how far the attempt got: `rejected`, `no_gallery`, `no_match`, `matched`, `locked_out`, ...), `reason`, and `state`. `user_id` is only filled in when access is granted.
+
+Failed-attempt lockout is disabled during development (`door.max_failures: 0`), so you can retry immediately. Set `door.max_failures` above zero to refuse attempts for `door.cooldown_seconds` after that many consecutive failures. Only a wrong face shape, an unknown face, or frames that disagree count as failures. Standing too far away does not. Every attempt, spoofs included, goes into `data/access.db`; read it with `GET /v1/auth/log` (admin token).
+
+On Record, select the person and session, confirm consent, and click **Enroll face from this session** after recording. This enrolls genuine laser-off face samples, adds the person to People with face access, and preserves other enrolled people. Existing saved sessions can be enrolled without recording again. The admin endpoint is `POST /v1/users/{user_id}/enroll-takes` with `{"session": "s1", "consent": true}`.
+
+For offline bulk rebuilding, use:
+
+```bash
+uv run python -m enroll.from_takes --embedder arcface_r50   # writes data/gallery.npz
+```
+
+The bulk command replaces the gallery and uses each person's first session, so later sessions can be used to test the door. The API picks up gallery updates without a restart. The file is not encrypted. It stays under `data/`, which git ignores.
 
 ### Checking distance against a tape measure
 

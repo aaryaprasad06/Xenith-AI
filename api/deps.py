@@ -7,6 +7,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 
 from api.core.config import Settings
 from api.services.camera import CameraHub
+from api.services.door import DoorService
 from api.services.guided import GuidedRecorder
 from api.services.users import UserStore
 
@@ -21,6 +22,10 @@ def get_raw_root(request: Request) -> Path:
 
 def get_camera(request: Request) -> CameraHub:
     return request.app.state.camera
+
+
+def get_door(request: Request) -> DoorService:
+    return request.app.state.door
 
 
 def get_guided(request: Request) -> GuidedRecorder:

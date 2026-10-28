@@ -4,11 +4,15 @@
 # check is off: on this D435 it did not separate sharp from blurred faces
 # (journal, 2026-10-18). Measure with `python -m liveness.tune_blur`.
 # rgb adds the colour camera, mapped into the IR viewport (Frame.rgb).
+# match.frames_required is the number of laser-off faces one attempt must embed,
+# and agree_frac the share of them whose own top match must be the same person
+# (face/match.py). threshold is still the PRD starting value, not tuned.
 camera: {width: 848, height: 480, fps: 30, depth_units: 0.0001, auto_exposure_limit_us: 3000, rgb: true}
 quality: {min_dist_m: 0.10, max_dist_m: 0.60, min_face_px: 80, max_hole_frac: 0.2}
 liveness: {relief_min_m: 0.015, relief_max_m: 0.08, flat_max_m: 0.005, nose_cheek_min_m: 0.008, model_threshold: 0.5, frames_required: 5}
-match: {threshold: 0.45, unknown_label: "unknown"}
-door: {gpio_pin: 17, unlock_seconds: 5, max_failures: 5, cooldown_seconds: 60}
+match: {threshold: 0.45, unknown_label: "unknown", frames_required: 3, agree_frac: 0.6}
+# Lockout is disabled during development; set max_failures > 0 to enable it.
+door: {gpio_pin: 17, unlock_seconds: 5, max_failures: 0, cooldown_seconds: 60}
 
 # Capture-only settings (not in the PRD block above). The filter chain order is
 # fixed in capture/filters.py; only parameters live here.

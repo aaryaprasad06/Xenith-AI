@@ -106,8 +106,15 @@ class RealSenseStream:
 
     def __exit__(self, *exc: object) -> None:
         if self._pipeline is not None:
-            self._pipeline.stop()
+            pipeline = self._pipeline
             self._pipeline = None
+            try:
+                pipeline.stop()
+            except RuntimeError:
+                # A disconnected device can already have stopped its pipeline.
+                # Keep the original frame error so the API explains the failure.
+                if not exc or exc[0] is None:
+                    raise
 
     @staticmethod
     def _enable_alternating_emitter(depth_sensor: Any) -> None:

@@ -32,6 +32,7 @@ uv run python -m capture.realsense_stream # live IR + depth preview (needs D435)
 uv run python -m liveness.watch           # live liveness overlay
 uv run python -m capture.recorder --person p001 --session s1 --pose center --lighting lit --consent
 uv run python -m eval.far_frr --embedder arcface_r50   # or adaface_ir101 / sface / raw_pixels; needs 2+ people
+uv run python -m enroll.from_takes --embedder arcface_r50   # gallery for /authenticate from recorded takes
 
 cp .env.example .env && ./dev.sh          # API :8000 + Astro console :4321
 cd web && pnpm install                    # first time only
@@ -41,8 +42,8 @@ cd web && pnpm install                    # first time only
 
 ## Architecture
 
-The pipeline is capture → detect/align → quality gate → liveness → (identity,
-not built) → door decision (no relay/state machine yet).
+The pipeline is capture → detect/align → quality gate → liveness → identity
+(1:N match) → door decision (state machine, mock relay, access log).
 
 - **`capture/`** turns the D435 into `Frame` objects (`capture/frame.py`):
   left IR, depth in metres (0 = invalid), intrinsics, timestamp, and
@@ -52,17 +53,31 @@ not built) → door decision (no relay/state machine yet).
   comes from `frame_laser_power_mode` metadata; the code refuses to guess if it
   is missing. With `camera.rgb: true`, `Frame.rgb` is colour aligned into the
   IR viewport (black where depth is missing).
-- **`face/`**: YuNet detection on IR (`models/*.onnx`) and 112×112 alignment.
+- **`face/`**: YuNet detection on IR (`models/*.onnx`), 112×112 alignment,
+  embedders (`embed.py`, registry `EMBEDDERS`), and `match.py`: a `Gallery`
+  (`.npz`, mean template plus individual vectors per person) and
+  `match_window`, which averages an attempt's laser-off faces and needs the
+  per-frame top matches to agree.
 - **`liveness/`**: `session.judge_window` decides over a short window of frames —
   it needs several laser-on frames *and* at least one laser-off frame, then
   `depth_check` tests face relief and nose-closer-than-cheeks. `watch.py` is
-  the live overlay.
+  the live overlay. `shape_failed` marks a measured wrong shape (likely spoof)
+  apart from framing problems.
+- **`control/`**: `attempt.evaluate_window` runs liveness, then matching (only
+  on a live window, on laser-off frames near the live face). `state_machine.
+  DoorController` walks the PRD states, re-locks after `door.unlock_seconds`
+  and locks out after `door.max_failures` counted failures (wrong shape,
+  unknown face, disagreeing frames). `relay.MockRelay` only logs.
+- **`logging_/access_log.py`**: every attempt in SQLite `access_events`.
 - **`api/`**: FastAPI, RealSenseID-REST layout — `/v1` routers (auth, users,
   preview, device) over one shared `CameraHub` (`api/services/camera.py`) that
   owns the single pipeline and a ring of recent frames. PRD-named aliases
   (`/authenticate`, `/admin/...`) live in `api/main.py`. Admin routes need
-  `Authorization: Bearer $FACE_ID_ADMIN_TOKEN`. Authenticate currently always
-  returns `denied`: `live` does not unlock anything until matching exists.
+  `Authorization: Bearer $FACE_ID_ADMIN_TOKEN`. `/v1/auth` goes through
+  `DoorService` (`api/services/door.py`), which owns the controller, relay,
+  access log (`GET /v1/auth/log`, admin) and the gallery file
+  (`FACE_ID_GALLERY`, re-read when it changes). Until `enroll/` exists the
+  gallery comes from recorded takes via `enroll.from_takes`.
 - **`web/`**: Astro console that proxies `/v1`, `/health`, `/authenticate`, `/admin` to the API.
 - **`configs/default.yaml`** holds every threshold. `capture/config.py`
   requires all sections (`camera`, `quality`, `liveness`, `match`, `door`,

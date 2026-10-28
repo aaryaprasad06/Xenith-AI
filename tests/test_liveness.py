@@ -140,7 +140,7 @@ def test_window_accepts_five_curved_frames_with_laser_off():
     decision = judge_window(frames, faces, saw_emitter_off=True, cfg=cfg)
     assert decision.status == "live"
     assert decision.live is True
-    assert "door stays locked" in decision.reason
+    assert "laser turned off" in decision.reason
 
 
 def test_window_rejects_a_flat_print():
@@ -150,6 +150,7 @@ def test_window_rejects_a_flat_print():
     decision = judge_window(frames, faces, saw_emitter_off=True, cfg=cfg)
     assert decision.status == "rejected"
     assert decision.reason.startswith("flat surface")
+    assert decision.shape_failed
 
 
 def test_window_requires_a_laser_off_frame():
@@ -159,6 +160,7 @@ def test_window_requires_a_laser_off_frame():
     decision = judge_window(frames, faces, saw_emitter_off=False, cfg=cfg)
     assert decision.status == "rejected"
     assert "laser did not turn off" in decision.reason
+    assert not decision.shape_failed
 
 
 def test_window_waits_for_enough_frames():

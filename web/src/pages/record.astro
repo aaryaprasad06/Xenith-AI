@@ -5,9 +5,9 @@ import Base from "../layouts/Base.astro";
 
 <Base title="Record — Face-ID" current="record">
   <header class="page-heading">
-    <p class="eyebrow">01 / CAPTURE</p>
-    <h1>Record face samples</h1>
-    <p>Build a consented set of live and spoof samples for this person.</p>
+    <p class="eyebrow">01 / FACE CAPTURE</p>
+    <h1>Record your face</h1>
+    <p>Follow the circle to record your face, then enroll the saved samples for face access.</p>
   </header>
   <div class="recorder">
     <div class="panel">
@@ -27,27 +27,21 @@ import Base from "../layouts/Base.astro";
       </form>
       <p id="message" class="result" role="status"></p>
 
+      <h2 class="section-heading">Finish enrollment</h2>
+      <p>After recording, enroll this person's saved session to add them to People and enable face access.</p>
+      <Button id="enroll-face" type="button" disabled>Enroll face from this session</Button>
+      <p><a href="/users">View People and face access</a></p>
+
       <h2 class="section-heading">Recorded in this session</h2>
       <p id="empty-takes" class="empty-takes">No takes yet. Completed samples will appear here.</p>
       <ul id="takes" class="people"></ul>
 
-      <details class="manual">
-        <summary>Record a manual take</summary>
-        <p class="note">One take with a pose you pick. The guided steps cover the usual set.</p>
-        <div class="fields">
-          <label>Pose <select id="pose"></select></label>
-          <label>Lighting <select id="lighting"></select></label>
-          <label>Attack <select id="attack"></select></label>
-          <label>Frames <input id="frames" type="number" min="2" max="300" value="30" /></label>
-        </div>
-        <div class="actions"><Button id="record" variant="quiet" type="button">Record in 3 s</Button></div>
-      </details>
     </div>
 
     <section class="stage">
-      <div class="capture-meta"><span class="eyebrow">Guided capture</span><span>IR + depth</span></div>
+      <div class="capture-meta"><span class="eyebrow">Guided capture</span><span>Colour preview</span></div>
       <div class="ring" id="ring" data-state="idle">
-        <img class="face-view" src="/v1/preview/stream" alt="Live infrared from the depth camera, mirrored" />
+        <img class="face-view" src="/v1/preview/rgb" alt="Live colour view from the RealSense camera, mirrored" />
         <div class="face-placeholder" aria-hidden="true">
           <svg viewBox="0 0 32 32"><path d="M5 9h5l2-3h8l2 3h5a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V11a2 2 0 0 1 2-2Z"/><circle cx="16" cy="17" r="5"/></svg>
           <span>Waiting for camera</span>
@@ -57,8 +51,8 @@ import Base from "../layouts/Base.astro";
           <circle id="pointer" class="pointer" r="5" cx="0" cy="0"></circle>
         </svg>
       </div>
-      <p class="camera-caption">Infrared camera <span>•</span> Keep your face centered</p>
-      <p id="prompt" class="prompt" role="status">Choose a step and press Start.</p>
+      <p class="camera-caption">Colour camera <span>•</span> Keep your face centered</p>
+      <p id="prompt" class="prompt" role="status">Press Start and follow the circle.</p>
       <p id="rate" class="rate"></p>
       <div class="actions">
         <Button id="start" type="button">Start</Button>
@@ -87,25 +81,22 @@ import Base from "../layouts/Base.astro";
   const takesList = $("takes");
   const startButton = $<HTMLButtonElement>("start");
   const cancelButton = $<HTMLButtonElement>("cancel");
+  const enrollButton = $<HTMLButtonElement>("enroll-face");
   const ring = $("ring");
   const rate = $("rate");
   const emptyTakes = $("empty-takes");
   const preview = document.querySelector<HTMLImageElement>(".face-view")!;
   const placeholder = document.querySelector<HTMLElement>(".face-placeholder")!;
   const pointer = document.querySelector<SVGCircleElement>("#pointer")!;
-  const pose = $<HTMLSelectElement>("pose");
-  const lighting = $<HTMLSelectElement>("lighting");
-  const attack = $<HTMLSelectElement>("attack");
-  const frames = $<HTMLInputElement>("frames");
-  const recordButton = $<HTMLButtonElement>("record");
 
-  type Step = "circle" | "dark" | "print" | "screen";
+  type Step = "circle";
 
   interface Take {
     take: string;
     frames: number;
     laser_on: number;
     laser_off: number;
+    attack: string;
   }
 
   interface GuidedState {
@@ -123,9 +114,6 @@ import Base from "../layouts/Base.astro";
 
   const STEPS: Array<{ step: Step; title: string; how: string }> = [
     { step: "circle", title: "Face circle", how: "Look straight at the camera, then roll your head slowly in a circle." },
-    { step: "dark", title: "In the dark", how: "Turn the room light off, then look straight at the camera." },
-    { step: "print", title: "Printed photo", how: "Hold a printed photo of the face up to the camera. This is an attack sample." },
-    { step: "screen", title: "Phone screen", how: "Show a photo of the face on a phone. This is an attack sample." },
   ];
   const TICKS = 48;
 
@@ -136,10 +124,17 @@ import Base from "../layouts/Base.astro";
   let guidedActive = false;
   let statusReady = false;
   startButton.disabled = true;
-  recordButton.disabled = true;
 
-  preview.addEventListener("load", () => { placeholder.hidden = true; });
-  preview.addEventListener("error", () => { placeholder.hidden = false; });
+  let previewRetry: number | undefined;
+  preview.addEventListener("load", () => {
+    placeholder.hidden = true;
+    window.clearTimeout(previewRetry);
+  });
+  preview.addEventListener("error", () => {
+    placeholder.hidden = false;
+    window.clearTimeout(previewRetry);
+    previewRetry = window.setTimeout(() => { preview.src = `/v1/preview/rgb?t=${Date.now()}`; }, 2000);
+  });
   if (preview.complete && preview.naturalWidth > 0) placeholder.hidden = true;
 
   tokenInput.value = readToken();
@@ -182,14 +177,10 @@ import Base from "../layouts/Base.astro";
     });
   }
 
-  function stepTakes(step: Step): string[] {
+  function stepTakes(_step: Step): string[] {
     const g = glasses.checked ? "_glasses" : "";
-    if (step === "circle") {
-      const poses = ["center", "right", "up_right", "up", "up_left", "left", "down_left", "down", "down_right"];
-      return poses.map((p) => `${p}_lit${g}`);
-    }
-    if (step === "dark") return [`center_dark${g}`];
-    return [`center_lit_${step}`];
+    const poses = ["center", "right", "up_right", "up", "up_left", "left", "down_left", "down", "down_right"];
+    return poses.map(pose => `${pose}_lit${g}`);
   }
 
   function renderSteps(): void {
@@ -246,6 +237,7 @@ import Base from "../layouts/Base.astro";
         remove.className = buttonClass("danger");
         remove.textContent = "Delete";
         remove.addEventListener("click", async () => {
+          if (active) return;
           const path = [person.value.trim(), session.value.trim(), take.take].map(encodeURIComponent).join("/");
           const response = await fetch(`/v1/recordings/${path}`, { method: "DELETE", headers: authHeaders() });
           const body = await response.json();
@@ -266,11 +258,12 @@ import Base from "../layouts/Base.astro";
       const query = new URLSearchParams({ person: p, session: s });
       const response = await fetch(`/v1/recordings?${query}`, { headers: authHeaders() });
       const body = await response.json();
-      if (response.ok) recorded = body.takes;
+      if (response.ok) recorded = body.takes.filter((take: Take) => take.attack === "none");
       else show(body.detail ?? "Could not list takes", "bad");
     }
     renderSteps();
     renderTakes();
+    enrollButton.disabled = active || recorded.length === 0;
   }
 
   function ready(): boolean {
@@ -288,11 +281,11 @@ import Base from "../layouts/Base.astro";
   function setRunning(running: boolean, guided = false): void {
     active = running;
     guidedActive = running && guided;
-    startButton.disabled = running;
-    recordButton.disabled = running;
+    startButton.disabled = running || !statusReady;
     cancelButton.disabled = !guidedActive;
-    [person, session, glasses, overwrite, consent, pose, lighting, attack, frames].forEach((control) => { control.disabled = running; });
-    document.querySelectorAll<HTMLButtonElement>("#steps button").forEach((button) => { button.disabled = running; });
+    enrollButton.disabled = running || recorded.length === 0;
+    [person, session, glasses, overwrite, consent].forEach((control) => { control.disabled = running; });
+    document.querySelectorAll<HTMLButtonElement>("#steps button, #takes button").forEach((button) => { button.disabled = running; });
     ring.classList.toggle("live", running);
   }
 
@@ -309,12 +302,12 @@ import Base from "../layouts/Base.astro";
     ring.dataset.state = state.status;
     prompt.className = state.status === "failed" ? "prompt bad" : state.status === "done" ? "prompt good" : "prompt";
     if (state.status === "idle") {
-      prompt.textContent = "Choose a step and press Start.";
+      prompt.textContent = "Press Start and follow the circle.";
       pointer.classList.remove("shown");
       rate.textContent = "";
       return;
     }
-    prompt.textContent = state.prompt;
+    prompt.textContent = state.status === "done" ? "Recordings saved. Enroll your face to finish." : state.prompt;
     paintTicks(state.phase === "circle" || state.status === "done" ? state.ticks : progressTicks(state.progress));
     // The dot shows where the head points; reaching the ticks (radius 84) counts.
     const showPointer = state.status === "running" && state.phase === "circle" && state.pointer !== null;
@@ -345,7 +338,7 @@ import Base from "../layouts/Base.astro";
       polling = undefined;
       setRunning(false);
       if (state.status === "done") {
-        show(`Saved ${state.saved.join(", ")}.`, "good");
+        show(`Saved ${state.saved.length} takes. Click "Enroll face from this session" to finish adding this person.`, "good");
         overwrite.checked = false;
         await refresh().catch(() => show("Saved successfully, but the take list could not refresh.", "bad"));
         nextStep();
@@ -360,12 +353,12 @@ import Base from "../layouts/Base.astro";
         show("Capture status is temporarily unavailable. The subject stays locked while reconnecting.", "bad");
         polling = window.setTimeout(() => void poll(), 1000);
       } else {
-        statusReady = true;
+        statusReady = false;
         polling = undefined;
         setRunning(false);
         ring.dataset.state = "failed";
         prompt.textContent = "Could not check the capture service.";
-        show("Could not check capture status. Retry when the API is available.", "bad");
+        show("Could not check capture status. Save your admin token to retry when the API is available.", "bad");
       }
     }
   }
@@ -429,82 +422,6 @@ import Base from "../layouts/Base.astro";
     }
   }
 
-  async function recordManual(): Promise<void> {
-    if (!statusReady || recordButton.disabled || !ready()) return;
-    setRunning(true);
-    ring.dataset.state = "running";
-    prompt.className = "prompt";
-    try {
-      for (let left = 3; left > 0; left -= 1) {
-        prompt.textContent = `Manual take in ${left}.`;
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-      prompt.textContent = "Recording. Hold still.";
-      ring.dataset.state = "saving";
-      const response = await fetch("/v1/recordings", {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          person: person.value.trim(),
-          session: session.value.trim(),
-          pose: pose.value,
-          lighting: lighting.value,
-          attack: attack.value,
-          glasses: glasses.checked,
-          frames: Number(frames.value),
-          consent: consent.checked,
-          overwrite: overwrite.checked,
-        }),
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        ring.dataset.state = "failed";
-        prompt.textContent = typeof body.detail === "string" ? body.detail : "Recording failed";
-        prompt.className = "prompt bad";
-        return;
-      }
-      const { take, faces_on, faces_off } = body;
-      prompt.textContent =
-        `Saved ${take.take}. One face in ${faces_off}/${take.laser_off} laser-off ` +
-        `and ${faces_on}/${take.laser_on} laser-on frames.`;
-      ring.dataset.state = "done";
-      prompt.className = "prompt good";
-      await refresh().catch(() => show("Saved successfully, but the take list could not refresh.", "bad"));
-    } catch {
-      ring.dataset.state = "failed";
-      prompt.textContent = "The API could not complete the manual take. Check the connection and try again.";
-      prompt.className = "prompt bad";
-      show("Manual capture failed. Check the connection and try again.", "bad");
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  function fill(select: HTMLSelectElement, values: string[], chosen: string): void {
-    select.replaceChildren(
-      ...values.map((value) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = value;
-        option.selected = value === chosen;
-        return option;
-      }),
-    );
-  }
-
-  async function loadOptions(): Promise<void> {
-    const response = await fetch("/v1/recordings/options", { headers: authHeaders() });
-    const body = await response.json();
-    if (!response.ok) {
-      show(body.detail ?? "Could not load the recorder options", "bad");
-      return;
-    }
-    fill(pose, body.poses, "center");
-    fill(lighting, body.lighting, "lit");
-    fill(attack, body.attacks, "none");
-    frames.value = String(body.default_frames);
-  }
-
   function remember(): void {
     try {
       localStorage.setItem("face-id-record-person", person.value.trim());
@@ -515,6 +432,30 @@ import Base from "../layouts/Base.astro";
     refresh().catch(() => show("The API is unreachable.", "bad"));
   }
 
+  async function enrollFace(): Promise<void> {
+    if (active || !ready()) return;
+    const userId = person.value.trim();
+    setRunning(true);
+    enrollButton.textContent = "Enrolling face…";
+    show("Preparing face samples. This may take a few seconds.");
+    try {
+      const response = await fetch(`/v1/users/${encodeURIComponent(userId)}/enroll-takes`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ session: session.value.trim(), consent: consent.checked }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not enroll face.");
+      show(`${userId} enrolled from ${body.takes_used} takes. They now appear in People with face access.`, "good");
+      prompt.textContent = "Face enrolled. Ready to authenticate.";
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Enrollment failed. Your recordings are saved; try again.", "bad");
+    } finally {
+      enrollButton.textContent = "Enroll face from this session";
+      setRunning(false);
+    }
+  }
+
   person.addEventListener("change", () => {
     consent.checked = false;
     remember();
@@ -523,7 +464,7 @@ import Base from "../layouts/Base.astro";
   glasses.addEventListener("change", renderSteps);
   startButton.addEventListener("click", () => void start());
   cancelButton.addEventListener("click", () => void cancel());
-  recordButton.addEventListener("click", () => void recordManual());
+  enrollButton.addEventListener("click", () => void enrollFace());
   $("labels").addEventListener("submit", (event) => event.preventDefault());
 
   document.addEventListener("keydown", (event) => {
@@ -536,9 +477,10 @@ import Base from "../layouts/Base.astro";
 
   $("save-token").addEventListener("click", () => {
     saveToken(tokenInput.value);
-    Promise.all([loadOptions(), refresh()]).catch(() => show("The API is unreachable.", "bad"));
+    if (polling === undefined && !active) void poll();
+    Promise.all([refresh()]).catch(() => show("The API is unreachable.", "bad"));
   });
 
   paintTicks([]);
-  Promise.all([loadOptions(), refresh(), poll()]).catch(() => show("The API is unreachable.", "bad"));
+  Promise.all([refresh(), poll()]).catch(() => show("The API is unreachable.", "bad"));
 </script>

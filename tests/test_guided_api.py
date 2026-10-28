@@ -25,6 +25,8 @@ def client(tmp_path: Path):
         camera_enabled=False,
         db_path=tmp_path / "users.db",
         raw_root=tmp_path / "raw",
+        access_log_path=tmp_path / "access.db",
+        gallery_path=tmp_path / "gallery.npz",
     )
     app = create_app(settings)
     with TestClient(app) as test_client:

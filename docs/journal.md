@@ -527,6 +527,177 @@ Run on Ameen's Windows laptop, on the same takes as the SFace and ArcFace runs a
 - Kept the navigation and capture ring. Rebuilt Preview as a joined camera and control workspace, with the check action above the instructions and a restrained yellow action color. Directory and hardware views now use indexed sections and a separate dark guidance panel. The device diagram is an illustration, not a live hardware reading.
 - The browser confirmed all three font families loaded. Reviewed desktop Preview and Record, phone People, and tablet Device. All four routes fit at 1440, 834, 390, and 320 CSS pixels without horizontal overflow. The main liveness action fits within a 1440 by 700 viewport. Simulated denial, keyboard step selection, and reduced motion still work, with no uncaught page errors during those checks. Physical camera behavior was not retested.
 
+## 2026-10-22 — Matching, door state machine, mock relay and access log
+
+`/authenticate` now goes the whole way: liveness, then 1:N matching, then the door. A live, enrolled face unlocks the mock relay; everything else is denied and logged. This is step 4's matcher and most of step 6, built without the camera so the morning session can test the full path.
+
+**Matching (`face/match.py`).**
+
+- The gallery keeps each person's mean template and every individual enrolment vector, and a person scores their best row. The PRD asks for both. The individual rows help when a pose was only seen once at enrolment.
+- One attempt averages the laser-off faces of the window into one query. The per-frame top matches must also agree (`match.agree_frac: 0.6` of at least `match.frames_required: 3` faces). One odd frame cannot open the door on its own.
+- Laser-off frames are used because the face is found in every one of them, and the dot pattern breaks it up on laser-on (2026-10-17).
+- A laser-off face only counts if it sits where the live face was (within `MAX_MOTION_FRAC` of the image width). The matcher cannot be shown a different face than the one whose depth was checked.
+- Liveness still runs first. A spoof is never embedded, and a test checks that.
+- The threshold is still the PRD starting value, 0.45. Same-person ArcFace scores were 0.55 to 0.79, and the phone screen scored 0.56 (2026-10-18), so 0.45 is low. It waits for p002 and `eval.far_frr`.
+
+**Door (`control/`).**
+
+- `DoorController` walks the PRD states and records the path for the log. It takes a clock as an argument, so the tests drive time and do not sleep.
+- COOLDOWN is used for the lockout, not as a step after every unlock. The config already pairs `cooldown_seconds` with `max_failures`. After an unlock the door goes back to IDLE when `unlock_seconds` runs out.
+- Only failures that say something about the person count toward the lockout: a measured wrong face shape, an unknown face, or frames that disagree. A face too far away, two faces, motion, or a missing gallery do not count. Otherwise a real user standing badly would lock themselves out. These attempts never reach the matcher, so not counting them gives an attacker nothing to probe. `shape_failed` on the liveness result tells the two kinds apart.
+- A lockout also closes a door that is still open. A grant while the door is open keeps it open for longer. Stopping the API locks the door.
+- The mock relay starts locked and only logs `UNLOCK` / `LOCK`. A thread in `DoorService` calls `poll` every 0.2 s so the re-lock happens even if no request comes in.
+
+**Access log (`logging_/access_log.py`).** These are the PRD columns. `liveness_geom` is the relief in metres and `liveness_model` stays NULL until step 7. Three columns were added: `status`, `state` and `path`, so a spoof can be told apart from a badly framed face. Every call is logged, including no-face and camera-down calls. Admins read it with `GET /v1/auth/log`.
+
+**API answer.** `decision` is now `granted` or `denied`, and `status` says how far the attempt got. `user_id` is only filled in on a grant, so a denied caller learns nothing about who is enrolled.
+
+**Gallery for now (`enroll/from_takes.py`).** Real enrolment (`enroll.py`, the encrypted store) is not built. Until then this builds `data/gallery.npz` from recorded takes, each person from their first session. The file is not encrypted, and deleting a user in the API does not remove them from it. Both are for `enroll/store.py`. The API reloads the file when it changes. The embedder is whichever one built the gallery, so the config cannot name a different one.
+
+**Replay on p001 s1** (ArcFace gallery from s1, each take's first 16 frames through `evaluate_window`, the same code as the API):
+
+| Takes | Result |
+| --- | --- |
+| center_lit, center_dark, right, up, up_left, up_right | matched p001, 230-380 ms per attempt |
+| center_lit_screen | rejected ("move to the centre of the camera") |
+| down, down_left, down_right, left | rejected by liveness: nose-to-cheek gap 0.3-0.7 cm (need 0.8). down_left read -76 cm, a bad depth sample |
+
+- The 1.00 scores only mean each take was in the gallery. This checks the wiring, not accuracy.
+- **Watch:** looking down fails the nose-to-cheek check, and that counts toward the lockout. If it happens live tomorrow, either `nose_cheek_min_m` is too strict for head-down poses, or the nose sample needs to be more robust (the -76 cm value).
+
+Tests: 146 pass, all without the camera.
+
+Next (morning, on the camera): rebuild the gallery, then try `/authenticate` live: enrolled face, a stranger if one is around, the phone screen, and the print. Note how often a real face gets a counted failure.
+
+## 2026-10-28 — Review AdaFace export validation
+
+Reviewed commit `511c163` separately from the existing uncommitted door changes.
+Its 112 tests pass with the local embedding models present. The AdaFace weights
+match their pinned SHA256, and a fresh ONNX export agrees with PyTorch to
+8.66e-6, within the export's 1e-3 tolerance.
+
+The validation could accept NaN output because `max(0.0, nan)` returns 0.0.
+It now rejects non-finite outputs from either backend and removes the temporary
+file even if export raises, preserving any existing final model on failure.
+Eleven regression cases cover these paths; eight fail on the original code.
+The working tree passes 157 tests. The API tests need to run outside the agent
+sandbox here because TestClient startup hangs inside it. Lint passes on the
+changed Python files; repository lint still reports two pre-existing TRY004
+findings in `capture/config.py`. No camera or new identity recordings were used.
+
+## 2026-10-28 — Demo preparation
+
+No RealSense camera is connected. Built `data/gallery.npz` from the existing
+consented p001 s1 genuine takes using ArcFace R50 (10 take vectors). The local
+API configuration points to this gallery. `pnpm --dir web build` passes.
+
+Replayed each take's first 16 frames through `DoorService`, using a temporary
+access log and advancing the controller clock between takes. Centre lit/dark,
+right and upward poses grant access. Left/downward poses fail the nose-to-cheek
+gate; down-left still has the -76 cm outlier. The screen take is denied for
+framing, so this replay does not prove geometry rejection of that attack.
+Gallery and replay use the same session; these are wiring checks, not accuracy.
+
+The live rehearsal is still pending. `docs/demo.md` gives startup steps,
+rehearsal checks and an explicit camera-free fallback.
+
+## 2026-10-28 — Integrate the updated console on Linux
+
+Fast-forwarded to `acd07ee`, including the Windows evaluation notes and the
+console redesign. Preserved the local matching and door changes. Resolved the
+checklist and journal conflicts by retaining both sets of work. Updated Preview,
+People and README wording to describe gallery matching and mock relay control;
+the People directory still does not add or revoke gallery embeddings.
+
+An initial failed guided-status request enabled capture despite unknown service
+state. Saving a valid admin token refreshed options but never retried guided
+status, leaving an existing capture without its cancellation control. Capture
+now remains disabled until status is known, and saving the token retries status.
+Playwright reproduced the failure and verified recovery and cancellation after
+the fix, using simulated API responses and no identity writes.
+
+All 157 backend tests pass. Browser checks pass authentication grant/denial,
+directory add/delete, device retry, and all four routes at widths 1440, 834, 390
+and 320 pixels without horizontal overflow or uncaught page errors. No physical
+camera was used. The two laptops' recordings were not copied or combined.
+
+## 2026-10-28 — Live authentication and visible mock door state on Linux
+
+`POST /authenticate` and `POST /v1/auth` already ran liveness, matching, the
+controller and access logging. Added `GET /v1/auth/state` and a polling indicator
+on Preview so the demo shows the actual lock, unlock and cooldown state. The
+controller snapshot reads the timer-adjusted state, relay and failures together.
+
+On the Linux laptop, D435 `236422073835`, firmware `5.17.3.10`, streamed live.
+Early attempts found two or three faces and were denied. After a USB disconnect
+and application restart, a live `/authenticate` call granted p001: ArcFace score
+0.7235 against threshold 0.45, 8/8 laser-off frames agreed, relief 0.0469 m and
+nose-to-cheek gap 0.0233 m. The subsequent state read reported locked and idle.
+This is one live grant, not a measured success rate or a live spoof rehearsal.
+
+The disconnect exposed a cleanup bug: `pipeline.stop()` raised after the device
+had already stopped and hid the useful disconnection message. Cleanup now keeps
+the original capture exception. Preview polls camera health and restores its
+stream when the restarted service becomes available. Replugging still requires
+restarting the API; automatic camera reconnection was not added.
+
+All 164 tests pass, including route grants for both aliases, timed re-lock,
+logging, spoof denial, lockout and disconnect cleanup. A separate HTTP check
+using the local recorded centre take and actual models granted p001 and observed
+the real five-second mock re-lock. This recorded check used temporary logs and
+did not claim live input. Browser checks pass the visible door state transition,
+existing console flows and responsive routes. The frontend build passes.
+
+## 2026-10-28 — People page reflects the actual face gallery
+
+On the Linux laptop, People said nobody was enrolled while p001 could
+authenticate. `/v1/users` only read the metadata database, but the matcher read
+the separate gallery. Listing now combines both sources, deduplicates IDs and
+returns `face_enrolled`. Gallery-only identities have no invented creation date.
+The page labels each row Face enrolled or ID only and calls the metadata form
+Add ID. Live face capture/enrolment is still a separate unfinished workflow.
+
+Delete, including the PRD alias, now removes gallery embeddings and metadata.
+Gallery updates are serialized with authentication, written through a temporary
+file and atomically replaced, and invalidate the cached matcher. Removing the
+last face removes the gallery file. Failed writes preserve the old gallery and
+metadata. Saved takes remain; an explicit gallery rebuild can re-enroll them.
+
+All 174 tests pass, including ten directory/gallery cases: gallery-only listing,
+mixed IDs, duplicate IDs, access revocation with a cached matcher, last-person
+deletion, and corrupt-gallery/write-failure handling. The frontend build passes.
+The live API lists the existing p001 as face enrolled and rejects anonymous
+listing. No actual enrolled identity or recorded sample was deleted during
+verification.
+
+## 2026-10-28 — Disable failed-attempt lockout during development
+
+On the Linux development machine, `door.max_failures: 0` now disables the
+failed-attempt cooldown so authentication can be retried immediately. A positive
+value restores the existing lockout. Authentication denials, access logging and
+automatic re-locking remain in place. Verification uses fake frames and a mock
+relay; no camera measurement was made.
+All 179 camera-free tests pass, including repeated spoof denials followed by a
+successful authentication without a cooldown. Ruff checks pass for the changed
+Python files.
+
+## 2026-10-28 — Finish enrollment from a saved recording session
+
+The Record page saved p002's takes but never enrolled their embeddings, so
+People still listed only p001. Added an explicit Finish enrollment action and
+admin-only saved-session endpoint. It uses genuine laser-off samples with the
+gallery's existing embedder (ArcFace R50 for a new gallery), replaces only the
+selected person's rows, writes atomically, and invalidates the cached matcher.
+Consent must be confirmed. Capture completion now points to enrollment instead
+of implying that saved recordings already provide face access.
+
+Recovered p002 on this Linux machine from all nine usable s1 takes with glasses.
+The ArcFace gallery now lists p001 and p002; p001's vectors are unchanged.
+No new camera capture or physical authentication test was made. All 185 tests
+pass, including session enrollment, repeated enrollment, matcher refresh,
+preserving other identities, consent, invalid/missing sessions, attack-only
+sessions and failed writes. The console build and changed-file Ruff checks pass.
+
 ## How to add an entry
 
 Add a new `## YYYY-MM-DD — title` section at the bottom. Keep the camera serial, the laptop, the config value, and the pass/fail result in the entry. Name the laptop when it is not the Linux one. Update [CHECKLIST.md](CHECKLIST.md) when a box changes.

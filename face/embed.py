@@ -10,6 +10,7 @@ beat, and it lets the evaluation harness run before a model is chosen.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -118,3 +119,12 @@ class AdaFaceEmbedder:
         self._net.setInput(blob)
         raw = self._net.forward().ravel()
         return Embedding(vector=l2_normalise(raw), quality=float(np.linalg.norm(raw)))
+
+
+# Every embedder by name, for the evaluation and the gallery file.
+EMBEDDERS: dict[str, Callable[[], Embedder]] = {
+    "raw_pixels": RawPixelEmbedder,
+    "sface": SFaceEmbedder,
+    "arcface_r50": ArcFaceEmbedder,
+    "adaface_ir101": AdaFaceEmbedder,
+}

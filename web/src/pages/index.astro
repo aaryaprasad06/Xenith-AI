@@ -23,10 +23,11 @@ import Base from "../layouts/Base.astro";
   </section>
   <aside class="auth-panel panel">
     <div class="console-label"><span class="eyebrow">VERIFY / 01</span><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 24 24 8M8 8h16v16" stroke="currentColor" stroke-width="1.5"/></svg></div><h2>Confirm a<br />live face.</h2><p class="note">A depth check helps distinguish a live face from a flat photo.</p>
-    <Button id="auth" type="button">Run liveness check <span aria-hidden="true">↗</span></Button>
+    <Button id="auth" type="button">Authenticate <span aria-hidden="true">↗</span></Button>
     <p id="result" class="result" role="status"></p>
+    <p id="door-state" class="note" role="status">Checking mock door state…</p>
     <ol class="instructions"><li><span>01</span><div><strong>Face the camera</strong><p>Keep your whole face within the preview.</p></div></li><li><span>02</span><div><strong>Stay close, hold still</strong><p>Use a dark background, 10–60 cm away.</p></div></li><li><span>03</span><div><strong>Run the check</strong><p>Review the result before trying again.</p></div></li></ol>
-    <div class="development-note"><span class="small-label">CURRENT CAPABILITY</span><strong>Liveness only. Door stays locked.</strong><p>Identity matching is still in development.</p></div>
+    <div class="development-note"><span class="small-label">CURRENT CAPABILITY</span><strong>Liveness, identity and mock door control.</strong><p>A live face matching the gallery unlocks the mock relay. Lock and unlock are logged; no physical door is connected.</p></div>
   </aside>
   </div>
   <div class="workspace-links" aria-label="Explore the workspace"><a href="/record"><span class="small-label">01 / CAPTURE</span><strong>Build a face dataset</strong><span class="workspace-arrow" aria-hidden="true">↗</span><span>Guided poses. Real depth.</span></a><a href="/users"><span class="small-label">02 / DIRECTORY</span><strong>Manage people</strong><span class="workspace-arrow" aria-hidden="true">↗</span><span>Enrollment starts with an ID.</span></a><a href="/device"><span class="small-label">03 / HARDWARE</span><strong>Know your device</strong><span class="workspace-arrow" aria-hidden="true">↗</span><span>Connection and camera details.</span></a></div>
@@ -35,6 +36,7 @@ import Base from "../layouts/Base.astro";
 <script>
   const health = document.querySelector("#health");
   const result = document.querySelector("#result");
+  const doorState = document.querySelector("#door-state");
   const auth = document.querySelector<HTMLButtonElement>("#auth");
   const stream = document.querySelector<HTMLImageElement>(".stream");
 
@@ -63,6 +65,31 @@ import Base from "../layouts/Base.astro";
     error: "The camera is not connected.",
   };
 
+  async function refreshDoor(): Promise<void> {
+    try {
+      const response = await fetch("/v1/auth/state");
+      if (!response.ok) throw new Error("Door state unavailable");
+      const body = await response.json();
+      if (doorState) {
+        const label = body.mock_relay ? "Mock door" : "Door";
+        doorState.textContent = body.state === "cooldown"
+          ? `${label}: locked out. Wait for cooldown to end.`
+          : `${label}: ${body.locked ? "locked" : "unlocked"}.`;
+        doorState.className = body.locked ? "note" : "note good";
+      }
+    } catch {
+      if (doorState) {
+        doorState.textContent = "Door state unavailable. Check the API connection.";
+        doorState.className = "note bad";
+      }
+    }
+  }
+
+  async function pollDoor(): Promise<void> {
+    await refreshDoor();
+    window.setTimeout(() => void pollDoor(), 1000);
+  }
+
   async function refreshHealth(): Promise<void> {
     const response = await fetch("/health");
     const body = await response.json();
@@ -73,6 +100,27 @@ import Base from "../layouts/Base.astro";
       const cameraMessage = document.querySelector("#camera-message");
       if (cameraMessage) cameraMessage.textContent = body.camera === "streaming" ? "Waiting for the live preview" : body.camera === "starting" ? "Starting your camera" : "Camera unavailable";
     }
+    if (body.camera === "disabled" || body.camera === "error") holdFrame();
+    else if (body.camera === "streaming" && stream?.dataset.fallback === "1") {
+      delete stream.dataset.fallback;
+      stream.style.opacity = "";
+      stream.src = "/v1/preview/stream";
+    }
+  }
+
+  async function pollHealth(): Promise<void> {
+    try {
+      await refreshHealth();
+    } catch {
+      if (health) {
+        health.textContent = "Connection unavailable. Check that the API is running.";
+        health.className = "bad";
+      }
+      holdFrame();
+      const cameraMessage = document.querySelector("#camera-message");
+      if (cameraMessage) cameraMessage.textContent = "Camera unavailable";
+    }
+    window.setTimeout(() => void pollHealth(), 2000);
   }
 
   auth?.addEventListener("click", async () => {
@@ -87,24 +135,19 @@ import Base from "../layouts/Base.astro";
       const body = await response.json();
       const raw = typeof body.reason === "string" ? body.reason : "";
       const reason = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
-      const live = body.status === "live";
-      result.className = live ? "result good" : "result bad";
-      result.textContent = live ? `Live. ${reason}` : `Denied. ${reason}`;
+      const granted = body.decision === "granted";
+      result.className = granted ? "result good" : "result bad";
+      result.textContent = granted ? `Unlocked for ${body.user_id}. ${reason}` : `Denied. ${reason}`;
     } catch (error: unknown) {
       result.className = "result bad";
       result.textContent = error instanceof Error ? error.message : "The check did not finish.";
     } finally {
       auth.disabled = false;
       auth.removeAttribute("aria-busy");
+      void refreshDoor();
     }
   });
 
-  refreshHealth().catch((error: unknown) => {
-    if (health) {
-      health.textContent = "Connection unavailable. Check that the API is running.";
-      health.className = "bad";
-      const cameraMessage = document.querySelector("#camera-message");
-      if (cameraMessage) cameraMessage.textContent = "Camera unavailable";
-    }
-  });
+  void pollHealth();
+  void pollDoor();
 </script>

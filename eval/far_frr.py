@@ -24,7 +24,7 @@ import argparse
 import csv
 import json
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -43,23 +43,10 @@ from eval.metrics import (
 )
 from face.align import align_crop
 from face.detect import Detection
-from face.embed import (
-    AdaFaceEmbedder,
-    ArcFaceEmbedder,
-    Embedder,
-    RawPixelEmbedder,
-    SFaceEmbedder,
-    l2_normalise,
-)
+from face.embed import EMBEDDERS, Embedder, l2_normalise
 
 Split = Literal["cross-session", "cross-take"]
 Emitter = Literal["on", "off", "any"]
-EMBEDDERS: dict[str, Callable[[], Embedder]] = {
-    "raw_pixels": RawPixelEmbedder,
-    "sface": SFaceEmbedder,
-    "arcface_r50": ArcFaceEmbedder,
-    "adaface_ir101": AdaFaceEmbedder,
-}
 FMR_TARGETS = (1e-2, 1e-3, 1e-4)
 FPIR_TARGETS = (1e-2, 1e-3)
 DEFAULT_OUT = DEFAULT_ROOT.parent / "eval"
